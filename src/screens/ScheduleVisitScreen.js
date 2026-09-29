@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
 import DateField from '../components/DateField';
@@ -46,8 +46,11 @@ export default function ScheduleVisitScreen({ navigation }) {
   };
 
   return (
-    <Screen showBack>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <Screen
+      showBack
+      keyboardAction={<PrimaryButton label="Create Visit" iconRight="arrow-right" onPress={create} />}
+    >
+      <>
         <PageTitle>Schedule Project Visit</PageTitle>
 
         <View style={{ paddingHorizontal: spacing.xl, gap: spacing.md }}>
@@ -125,7 +128,7 @@ export default function ScheduleVisitScreen({ navigation }) {
 
           <PrimaryButton label="Create Visit" iconRight="arrow-right" onPress={create} style={{ marginTop: spacing.sm }} />
         </View>
-      </KeyboardAvoidingView>
+      </>
     </Screen>
   );
 }

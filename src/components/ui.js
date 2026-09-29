@@ -16,6 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Icon from './Icon';
 import { colors, radius, spacing, type, shadow, borderWidth } from '../theme';
 import { images } from '../data';
@@ -448,6 +449,7 @@ export function Eyebrow({ children, style }) {
 export function BottomSheet({ visible, onClose, title, children, onCloseIcon = true }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
       <Pressable style={s.modalBackdrop} onPress={onClose}>
         <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={s.sheetHandle} />
@@ -462,6 +464,7 @@ export function BottomSheet({ visible, onClose, title, children, onCloseIcon = t
           {children}
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -470,7 +473,7 @@ export function BottomSheet({ visible, onClose, title, children, onCloseIcon = t
 export function CenterDialog({ visible, onClose, title, children }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={s.dialogBackdrop}>
+      <KeyboardAvoidingView behavior="padding" style={s.dialogBackdrop}>
         <View style={s.dialog}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={s.dialogTitle}>{title}</Text>
@@ -480,7 +483,7 @@ export function CenterDialog({ visible, onClose, title, children }) {
           </View>
           {children}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

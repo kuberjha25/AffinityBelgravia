@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Font from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import RootNavigator from './src/navigation/RootNavigator';
 import { AppProvider } from './src/store';
@@ -96,6 +97,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayout}>
+      <KeyboardProvider>
       <SafeAreaProvider>
         <AppProvider>
           <StatusBar style="dark" />
@@ -104,6 +106,7 @@ export default function App() {
           </NavigationContainer>
         </AppProvider>
       </SafeAreaProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

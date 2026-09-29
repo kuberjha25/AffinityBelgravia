@@ -6,14 +6,12 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import Icon from '../components/Icon';
 import { PrimaryButton } from '../components/ui';
+import KeyboardDockedSheet from '../components/KeyboardDockedSheet';
 import { colors, radius, spacing, type, borderWidth, shadow } from '../theme';
 import { auth, brand, images, socialLinks } from '../data';
 import { useApp } from '../store';
@@ -40,16 +38,10 @@ export default function LoginScreen({ navigation }) {
 
       <BrandCard />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={s.sheetWrap}
-      >
-        <ScrollView
-          style={s.sheet}
-          contentContainerStyle={s.sheetContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <View style={s.sheetWrap}>
+        <KeyboardDockedSheet style={s.sheet} contentContainerStyle={s.sheetContent}>
+          {({ onAnchorLayout }) => (
+          <>
           <Text style={s.welcome}>Welcome</Text>
           <Text style={s.lead}>Enter your mobile number to login or register</Text>
 
@@ -71,12 +63,9 @@ export default function LoginScreen({ navigation }) {
             />
           </View>
 
-          <PrimaryButton
-            label="Continue"
-            onPress={onContinue}
-            disabled={!valid}
-            style={{ marginTop: spacing.xl }}
-          />
+          <View onLayout={onAnchorLayout} style={{ marginTop: spacing.xl }}>
+            <PrimaryButton label="Continue" onPress={onContinue} disabled={!valid} />
+          </View>
 
           <Text style={s.legal}>
             By continuing, you agree to our{' '}
@@ -90,8 +79,10 @@ export default function LoginScreen({ navigation }) {
           </Text>
 
           <SocialRow />
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </>
+          )}
+        </KeyboardDockedSheet>
+      </View>
     </View>
   );
 }

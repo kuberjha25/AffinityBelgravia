@@ -7,7 +7,9 @@
     "icon": "./assets/icon.png",
     "scheme": "affinitybelgravia",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.affinity.belgravia"
@@ -46,6 +48,12 @@
           ]
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "70816880-dd0f-48b7-95e7-369f98eb4eed"
+      }
+    },
+    "owner": "kuberjha1998"
   }
 }

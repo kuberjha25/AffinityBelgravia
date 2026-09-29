@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
 import DateField from '../components/DateField';
@@ -45,8 +45,8 @@ export default function NewLeadScreen({ navigation }) {
   };
 
   return (
-    <Screen showBack>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <Screen showBack keyboardAction={<PrimaryButton label="Submit Lead" onPress={submit} />}>
+      <>
         <PageTitle>New Lead</PageTitle>
 
         <View style={{ paddingHorizontal: spacing.xl }}>
@@ -104,7 +104,7 @@ export default function NewLeadScreen({ navigation }) {
 
           <PrimaryButton label="Submit Lead" onPress={submit} style={{ marginTop: spacing.lg }} />
         </View>
-      </KeyboardAvoidingView>
+      </>
     </Screen>
   );
 }

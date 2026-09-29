@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import KeyboardActionBar, { ACTION_BAR_HEIGHT } from '../components/KeyboardActionBar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../components/Icon';
 import DateField from '../components/DateField';
@@ -35,8 +37,12 @@ export default function CompleteProfileScreen({ navigation }) {
 
   return (
     <SafeAreaView edges={['top']} style={s.root}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView
+        bottomOffset={ACTION_BAR_HEIGHT}
+        contentContainerStyle={s.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
           <WizardHeader
             step={1}
             total={3}
@@ -81,8 +87,10 @@ export default function CompleteProfileScreen({ navigation }) {
 
             <PrimaryButton label="Continue" iconRight="arrow-right" onPress={onContinue} style={{ marginTop: spacing.xl }} />
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+      <KeyboardActionBar>
+        <PrimaryButton label="Continue" iconRight="arrow-right" onPress={onContinue} />
+      </KeyboardActionBar>
     </SafeAreaView>
   );
 }

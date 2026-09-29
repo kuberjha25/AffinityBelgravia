@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, Image, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from './Icon';
+import KeyboardActionBar, { ACTION_BAR_HEIGHT } from './KeyboardActionBar';
 import { RoundIconButton } from './ui';
 import { colors, spacing, type } from '../theme';
 import { images } from '../data';
@@ -53,8 +55,12 @@ export function PageTitle({ children, subtitle, right, style }) {
   );
 }
 
+/** Gap between a focused input's bottom edge and the top of the keyboard. */
+export const KEYBOARD_GAP = 0;
+
 /**
  * Standard screen shell: safe-area background, app bar, scrolling body.
+ * `keyboardAction` is shown on top of the keyboard while the user is typing.
  */
 export default function Screen({
   children,
@@ -66,11 +72,12 @@ export default function Screen({
   contentContainerStyle,
   style,
   footer,
+  keyboardAction,
   edges = ['top'],
   backgroundColor = colors.surface,
 }) {
   const insets = useSafeAreaInsets();
-  const Body = scroll ? ScrollView : View;
+  const Body = scroll ? KeyboardAwareScrollView : View;
   const bodyProps = scroll
     ? {
         showsVerticalScrollIndicator: false,
@@ -79,6 +86,7 @@ export default function Screen({
           contentContainerStyle,
         ],
         keyboardShouldPersistTaps: 'handled',
+        bottomOffset: keyboardAction ? ACTION_BAR_HEIGHT : KEYBOARD_GAP,
       }
     : { style: [{ flex: 1 }, contentContainerStyle] };
 
@@ -87,6 +95,7 @@ export default function Screen({
       {showAppBar ? <AppBar showBack={showBack} onBack={onBack} right={appBarRight} /> : null}
       <Body {...bodyProps}>{children}</Body>
       {footer}
+      {keyboardAction ? <KeyboardActionBar>{keyboardAction}</KeyboardActionBar> : null}
     </SafeAreaView>
   );
 }

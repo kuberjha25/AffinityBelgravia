@@ -6,13 +6,11 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { PrimaryButton } from '../components/ui';
+import KeyboardDockedSheet from '../components/KeyboardDockedSheet';
 import { BrandCard, SocialRow } from './LoginScreen';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
 import { auth, images } from '../data';
@@ -20,7 +18,7 @@ import { auth, images } from '../data';
 /** Figma frame: `otp-verification` (12:73). */
 export default function OtpScreen({ navigation, route }) {
   const mobile = route?.params?.mobile || auth.demoMobile;
-  const [code, setCode] = useState(['4', '8', '2', '', '', '']);
+  const [code, setCode] = useState(() => Array(auth.otpLength).fill(''));
   const [seconds, setSeconds] = useState(30);
   const refs = useRef([]);
 
@@ -33,11 +31,20 @@ export default function OtpScreen({ navigation, route }) {
   const filled = code.every((d) => d !== '');
 
   const setDigit = (index, value) => {
-    const digit = value.replace(/\D/g, '').slice(-1);
+    const digits = value.replace(/\D/g, '');
     const next = [...code];
-    next[index] = digit;
+    if (digits.length > 1) {
+      // Pasted or SMS-autofilled code: spread it across the boxes.
+      digits.slice(0, auth.otpLength - index).split('').forEach((d, k) => {
+        next[index + k] = d;
+      });
+      setCode(next);
+      refs.current[Math.min(index + digits.length, auth.otpLength) - 1]?.focus();
+      return;
+    }
+    next[index] = digits;
     setCode(next);
-    if (digit && index < 5) refs.current[index + 1]?.focus();
+    if (digits && index < auth.otpLength - 1) refs.current[index + 1]?.focus();
   };
 
   const onKeyPress = (index, e) => {
@@ -56,13 +63,10 @@ export default function OtpScreen({ navigation, route }) {
       <LinearGradient colors={['rgba(28,27,25,0.35)', 'rgba(28,27,25,0)']} style={[s.hero, { height: 180 }]} />
       <BrandCard />
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.sheetWrap}>
-        <ScrollView
-          style={s.sheet}
-          contentContainerStyle={s.sheetContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <View style={s.sheetWrap}>
+        <KeyboardDockedSheet style={s.sheet} contentContainerStyle={s.sheetContent}>
+          {({ onAnchorLayout }) => (
+          <>
           <Text style={s.title}>Verify OTP</Text>
           <Text style={s.lead}>
             Enter the {auth.otpLength}-digit code sent to{' '}
@@ -80,19 +84,19 @@ export default function OtpScreen({ navigation, route }) {
                 onChangeText={(v) => setDigit(i, v)}
                 onKeyPress={(e) => onKeyPress(i, e)}
                 keyboardType="number-pad"
-                maxLength={1}
+                maxLength={auth.otpLength}
                 style={[s.otpBox, digit ? s.otpBoxFilled : null]}
                 selectTextOnFocus
+                autoFocus={i === 0}
+                autoComplete={i === 0 ? 'sms-otp' : 'off'}
+                textContentType={i === 0 ? 'oneTimeCode' : 'none'}
               />
             ))}
           </View>
 
-          <PrimaryButton
-            label="Verify"
-            disabled={!filled}
-            onPress={() => navigation.navigate('CompleteProfile')}
-            style={{ marginTop: spacing.xl }}
-          />
+          <View onLayout={onAnchorLayout} style={{ marginTop: spacing.xl }}>
+            <PrimaryButton label="Verify" disabled={!filled} onPress={() => navigation.navigate('CompleteProfile')} />
+          </View>
 
           <View style={s.resendRow}>
             <Text style={s.resendText}>Didn&apos;t receive the code? </Text>
@@ -104,8 +108,10 @@ export default function OtpScreen({ navigation, route }) {
           </View>
 
           <SocialRow />
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </>
+          )}
+        </KeyboardDockedSheet>
+      </View>
     </View>
   );
 }
