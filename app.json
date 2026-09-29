@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Affinity Belgravia",
+    "slug": "affinity-belgravia",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "affinitybelgravia",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.affinity.belgravia"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FBF9F5"
+      },
+      "package": "com.affinity.belgravia"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#FBF9F5"
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/ElectroluxSans-Thin.otf",
+            "./assets/fonts/ElectroluxSans-Light.otf",
+            "./assets/fonts/ElectroluxSans-Regular.otf",
+            "./assets/fonts/ElectroluxSans-Semibold.otf",
+            "./assets/fonts/ElectroluxSans-Bold.otf",
+            "./assets/fonts/ElectroluxSans-Italic.otf"
+          ]
+        }
+      ]
+    ]
+  }
+}

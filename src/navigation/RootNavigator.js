@@ -1,0 +1,71 @@
+import React from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import TabNavigator from './TabNavigator';
+
+import SplashScreen from '../screens/SplashScreen';
+import LoginScreen from '../screens/LoginScreen';
+import OtpScreen from '../screens/OtpScreen';
+import CompleteProfileScreen from '../screens/CompleteProfileScreen';
+import ProfileStepTwoScreen from '../screens/ProfileStepTwoScreen';
+import ChannelPartnerDetailsScreen from '../screens/ChannelPartnerDetailsScreen';
+import ThankYouScreen from '../screens/ThankYouScreen';
+
+import HomeScreen from '../screens/HomeScreen';
+import RegistrationsScreen from '../screens/RegistrationsScreen';
+import RegistrationDetailScreen from '../screens/RegistrationDetailScreen';
+import VisitDetailScreen from '../screens/VisitDetailScreen';
+import ScheduleVisitScreen from '../screens/ScheduleVisitScreen';
+import MISReportScreen from '../screens/MISReportScreen';
+import ProjectDetailScreen from '../screens/ProjectDetailScreen';
+import InventoryScreen from '../screens/InventoryScreen';
+import DocumentsScreen from '../screens/DocumentsScreen';
+import LeadDetailScreen from '../screens/LeadDetailScreen';
+import NewLeadScreen from '../screens/NewLeadScreen';
+import NewsDetailScreen from '../screens/NewsDetailScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import TermsScreen from '../screens/TermsScreen';
+import AboutScreen from '../screens/AboutScreen';
+
+const Stack = createNativeStackNavigator();
+
+export default function RootNavigator() {
+  return (
+    <Stack.Navigator
+      initialRouteName="Splash"
+      screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
+    >
+      {/* Onboarding */}
+      <Stack.Screen name="Splash" component={SplashScreen} options={{ animation: 'fade' }} />
+      <Stack.Screen name="Login" component={LoginScreen} options={{ animation: 'fade' }} />
+      <Stack.Screen name="Otp" component={OtpScreen} />
+      <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+      <Stack.Screen name="ProfileStepTwo" component={ProfileStepTwoScreen} />
+      <Stack.Screen name="ChannelPartnerDetails" component={ChannelPartnerDetailsScreen} />
+      <Stack.Screen name="ThankYou" component={ThankYouScreen} options={{ animation: 'fade' }} />
+
+      {/* Main app */}
+      <Stack.Screen name="Main" component={TabNavigator} options={{ animation: 'fade' }} />
+
+      {/* Pushed screens */}
+      <Stack.Screen
+        name="UserHome"
+        component={HomeScreen}
+        initialParams={{ variant: 'user' }}
+      />
+      <Stack.Screen name="Registrations" component={RegistrationsScreen} />
+      <Stack.Screen name="RegistrationDetail" component={RegistrationDetailScreen} />
+      <Stack.Screen name="VisitDetail" component={VisitDetailScreen} />
+      <Stack.Screen name="ScheduleVisit" component={ScheduleVisitScreen} />
+      <Stack.Screen name="MISReport" component={MISReportScreen} />
+      <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
+      <Stack.Screen name="Inventory" component={InventoryScreen} />
+      <Stack.Screen name="Documents" component={DocumentsScreen} />
+      <Stack.Screen name="LeadDetail" component={LeadDetailScreen} />
+      <Stack.Screen name="NewLead" component={NewLeadScreen} />
+      <Stack.Screen name="NewsDetail" component={NewsDetailScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="Terms" component={TermsScreen} />
+      <Stack.Screen name="About" component={AboutScreen} />
+    </Stack.Navigator>
+  );
+}
