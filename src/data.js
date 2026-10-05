@@ -61,18 +61,50 @@ export const roleOptions = [
   { id: 'freelancer', label: 'Freelancer', icon: 'user' },
 ];
 
-export const states = [
-  'Punjab',
-  'Haryana',
-  'Chandigarh',
-  'Delhi',
-  'Maharashtra',
-  'Karnataka',
-  'Gujarat',
-  'Rajasthan',
-  'Uttar Pradesh',
-  'Tamil Nadu',
-];
+/**
+ * Indian states / union territories with their main cities. Forms ask for the
+ * State first and then offer only that state's cities.
+ */
+export const citiesByState = {
+  'Andaman and Nicobar Islands': ['Port Blair'],
+  'Andhra Pradesh': ['Visakhapatnam', 'Vijayawada', 'Guntur', 'Nellore', 'Tirupati', 'Kurnool', 'Kakinada', 'Rajahmundry', 'Anantapur', 'Amaravati'],
+  'Arunachal Pradesh': ['Itanagar', 'Naharlagun', 'Pasighat', 'Tawang'],
+  Assam: ['Guwahati', 'Dibrugarh', 'Silchar', 'Jorhat', 'Nagaon', 'Tezpur', 'Tinsukia'],
+  Bihar: ['Patna', 'Gaya', 'Bhagalpur', 'Muzaffarpur', 'Darbhanga', 'Purnia', 'Arrah'],
+  Chandigarh: ['Chandigarh'],
+  Chhattisgarh: ['Raipur', 'Bhilai', 'Bilaspur', 'Korba', 'Durg', 'Rajnandgaon'],
+  'Dadra and Nagar Haveli and Daman and Diu': ['Daman', 'Diu', 'Silvassa'],
+  Delhi: ['New Delhi', 'Delhi', 'Dwarka', 'Rohini', 'Saket', 'Karol Bagh'],
+  Goa: ['Panaji', 'Margao', 'Vasco da Gama', 'Mapusa', 'Ponda'],
+  Gujarat: ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Gandhinagar', 'Bhavnagar', 'Jamnagar', 'Junagadh', 'Anand'],
+  Haryana: ['Gurugram', 'Faridabad', 'Panchkula', 'Ambala', 'Karnal', 'Panipat', 'Sonipat', 'Rohtak', 'Hisar', 'Yamunanagar', 'Kurukshetra'],
+  'Himachal Pradesh': ['Shimla', 'Dharamshala', 'Solan', 'Mandi', 'Kullu', 'Manali', 'Baddi'],
+  'Jammu and Kashmir': ['Srinagar', 'Jammu', 'Anantnag', 'Baramulla', 'Katra'],
+  Jharkhand: ['Ranchi', 'Jamshedpur', 'Dhanbad', 'Bokaro', 'Hazaribagh', 'Deoghar'],
+  Karnataka: ['Bengaluru', 'Mysuru', 'Mangaluru', 'Hubballi', 'Belagavi', 'Kalaburagi', 'Davanagere', 'Udupi'],
+  Kerala: ['Thiruvananthapuram', 'Kochi', 'Kozhikode', 'Thrissur', 'Kollam', 'Kannur', 'Alappuzha'],
+  Ladakh: ['Leh', 'Kargil'],
+  Lakshadweep: ['Kavaratti'],
+  'Madhya Pradesh': ['Bhopal', 'Indore', 'Jabalpur', 'Gwalior', 'Ujjain', 'Sagar', 'Rewa'],
+  Maharashtra: ['Mumbai', 'Pune', 'Nagpur', 'Thane', 'Navi Mumbai', 'Nashik', 'Aurangabad', 'Solapur', 'Kolhapur', 'Amravati'],
+  Manipur: ['Imphal', 'Thoubal', 'Churachandpur'],
+  Meghalaya: ['Shillong', 'Tura', 'Jowai'],
+  Mizoram: ['Aizawl', 'Lunglei', 'Champhai'],
+  Nagaland: ['Kohima', 'Dimapur', 'Mokokchung'],
+  Odisha: ['Bhubaneswar', 'Cuttack', 'Rourkela', 'Berhampur', 'Sambalpur', 'Puri'],
+  Puducherry: ['Puducherry', 'Karaikal', 'Mahe', 'Yanam'],
+  Punjab: ['Mohali', 'Zirakpur', 'Ludhiana', 'Amritsar', 'Jalandhar', 'Patiala', 'Bathinda', 'Kharar', 'Pathankot', 'Hoshiarpur', 'Moga', 'Firozpur', 'Rajpura'],
+  Rajasthan: ['Jaipur', 'Jodhpur', 'Udaipur', 'Kota', 'Ajmer', 'Bikaner', 'Alwar', 'Bhilwara'],
+  Sikkim: ['Gangtok', 'Namchi', 'Gyalshing'],
+  'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem', 'Tirunelveli', 'Vellore', 'Erode'],
+  Telangana: ['Hyderabad', 'Secunderabad', 'Warangal', 'Nizamabad', 'Karimnagar', 'Khammam'],
+  Tripura: ['Agartala', 'Udaipur', 'Dharmanagar'],
+  'Uttar Pradesh': ['Lucknow', 'Noida', 'Greater Noida', 'Ghaziabad', 'Kanpur', 'Agra', 'Varanasi', 'Prayagraj', 'Meerut', 'Bareilly', 'Aligarh'],
+  Uttarakhand: ['Dehradun', 'Haridwar', 'Rishikesh', 'Haldwani', 'Roorkee', 'Nainital'],
+  'West Bengal': ['Kolkata', 'Howrah', 'Durgapur', 'Asansol', 'Siliguri', 'Kharagpur'],
+};
+
+export const states = Object.keys(citiesByState);
 
 export const employees = [
   'Aman Verma — Sales Manager',
@@ -88,7 +120,7 @@ export const uploadDocuments = [
   { id: 'gst', title: 'GST Registration Certificate', hint: 'GSTIN copy (Required)', uploaded: false },
   { id: 'pan', title: 'PAN Card', hint: 'Company / Individual PAN (Required)', uploaded: false },
   { id: 'msme', title: 'MSME/Udyam Registration', hint: 'Optional, if registered', uploaded: false },
-  { id: 'rera', title: 'RERA Registration Number', hint: 'RERA Certificate copy', uploaded: false },
+  { id: 'rera', title: 'RERA Certificate', hint: 'RERA Certificate copy', uploaded: false },
 ];
 
 /* ------------------------------------------------------------------ user */
@@ -136,10 +168,10 @@ export const homeBanners = [
 ];
 
 export const homeGlance = [
-  { id: 'g1', value: '12', label: 'Registrations', route: 'Registrations' },
-  { id: 'g2', value: '8', label: 'Leads In Progress', route: 'Leads' },
-  { id: 'g3', value: '7', label: 'Visits Scheduled', route: 'Visits' },
-  { id: 'g4', value: '46', label: 'Units Available', route: 'Inventory' },
+  { id: 'g1', value: '12', label: 'Registrations', lines: ['Registrations'], route: 'Registrations' },
+  { id: 'g2', value: '8', label: 'Leads In Progress', lines: ['Leads In', 'Progress'], route: 'Leads' },
+  { id: 'g3', value: '7', label: 'Visits Scheduled', lines: ['Visits', 'Scheduled'], route: 'Visits' },
+  { id: 'g4', value: '46', label: 'Units Available', lines: ['Units', 'Available'], route: 'Inventory' },
 ];
 
 /** Quick access grid for the channel-partner home (screen `home-screen`). */
@@ -147,7 +179,7 @@ export const quickAccessPartner = [
   { id: 'qa1', label: 'Registrations', icon: 'clipboard-type', route: 'Registrations' },
   { id: 'qa2', label: 'Leads', icon: 'users', route: 'Leads' },
   { id: 'qa3', label: 'Project Visits', icon: 'calendar', route: 'Visits' },
-  { id: 'qa4', label: 'Project', icon: 'layers', route: 'ProjectDetail' },
+  { id: 'qa4', label: 'Project', icon: 'layers', route: 'Projects' },
   { id: 'qa5', label: 'Inventory', icon: 'shopping-bag', route: 'Inventory' },
   { id: 'qa6', label: 'Documents', icon: 'file', route: 'Documents' },
   { id: 'qa7', label: 'MIS Report', icon: 'trending-up', route: 'MISReport' },
@@ -157,7 +189,7 @@ export const quickAccessPartner = [
 export const quickAccessUser = [
   { id: 'qu1', label: 'Leads', icon: 'users', route: 'Leads' },
   { id: 'qu2', label: 'Visits', icon: 'calendar', route: 'Visits' },
-  { id: 'qu3', label: 'Project', icon: 'layers', route: 'ProjectDetail' },
+  { id: 'qu3', label: 'Project', icon: 'layers', route: 'Projects' },
   { id: 'qu4', label: 'Inventory', icon: 'shopping-bag', route: 'Inventory' },
   { id: 'qu5', label: 'Documents', icon: 'file', route: 'Documents' },
 ];
@@ -180,8 +212,8 @@ export const registrations = [
       Phone: '+91 98765 43210',
       Email: 'ayesha.khan@email.com',
       Address: '12, Marine Drive, Mumbai',
-      City: 'Mumbai',
       State: 'Maharashtra',
+      City: 'Mumbai',
       Pincode: '400001',
       'Date of Birth': '15 Mar 1990',
       Anniversary: '22 Dec 2015',
@@ -189,7 +221,6 @@ export const registrations = [
     professional: {
       Company: 'Khan Properties',
       'RERA Number': 'RERA-MH-2024-001',
-      Experience: '8 Years',
       'Registration Date': '28 May 2024',
       Status: 'Active',
     },
@@ -207,8 +238,8 @@ export const registrations = [
       Phone: '+91 91234 56789',
       Email: 'rohit.mehra@email.com',
       Address: '44, Sector 17, Chandigarh',
-      City: 'Chandigarh',
       State: 'Chandigarh',
+      City: 'Chandigarh',
       Pincode: '160017',
       'Date of Birth': '02 Aug 1987',
       Anniversary: '11 Nov 2013',
@@ -216,7 +247,6 @@ export const registrations = [
     professional: {
       Company: 'Mehra Realty',
       'RERA Number': 'RERA-CH-2024-114',
-      Experience: '11 Years',
       'Registration Date': '25 May 2024',
       Status: 'Active',
     },
@@ -234,8 +264,8 @@ export const registrations = [
       Phone: '+91 99876 54321',
       Email: 'pooja.sharma@email.com',
       Address: '9, Koregaon Park, Pune',
-      City: 'Pune',
       State: 'Maharashtra',
+      City: 'Pune',
       Pincode: '411001',
       'Date of Birth': '19 Jun 1993',
       Anniversary: '05 Feb 2019',
@@ -243,7 +273,6 @@ export const registrations = [
     professional: {
       Company: 'Sharma Media House',
       'RERA Number': 'RERA-MH-2024-208',
-      Experience: '5 Years',
       'Registration Date': '25 May 2024',
       Status: 'Active',
     },
@@ -261,8 +290,8 @@ export const registrations = [
       Phone: '+91 98123 45678',
       Email: 'arjun.verma@email.com',
       Address: '77, Golf Course Road, Gurugram',
-      City: 'Gurugram',
       State: 'Haryana',
+      City: 'Gurugram',
       Pincode: '122002',
       'Date of Birth': '30 Sep 1985',
       Anniversary: '14 Apr 2011',
@@ -270,7 +299,6 @@ export const registrations = [
     professional: {
       Company: 'Verma Estates',
       'RERA Number': 'RERA-HR-2024-076',
-      Experience: '13 Years',
       'Registration Date': '24 May 2024',
       Status: 'Active',
     },
@@ -288,8 +316,8 @@ export const registrations = [
       Phone: '+91 95432 10987',
       Email: 'neha.iyer@email.com',
       Address: '3, Indiranagar, Bengaluru',
-      City: 'Bengaluru',
       State: 'Karnataka',
+      City: 'Bengaluru',
       Pincode: '560038',
       'Date of Birth': '08 Jan 1992',
       Anniversary: '27 Jul 2018',
@@ -297,7 +325,6 @@ export const registrations = [
     professional: {
       Company: 'Iyer Digital',
       'RERA Number': 'RERA-KA-2024-311',
-      Experience: '6 Years',
       'Registration Date': '22 May 2024',
       Status: 'Active',
     },
@@ -324,8 +351,8 @@ export const siteVisits = [
     visitStatus: 'In Progress',
     notes: 'Discussed project details and pricing. Client interested in 3 BHK units.',
     history: [
-      { id: 'h1', time: '03:30 PM', duration: '45 mins', status: 'Attended', note: 'Met client at site office. Provided brochure and project walkthrough.' },
-      { id: 'h2', time: '11:30 AM', duration: '30 mins', status: 'Attended', note: 'Initial call to confirm interest. Client preferred weekend face-to-face.' },
+      { id: 'h1', date: '25 May 2024', time: '03:30 PM', duration: '45 mins', status: 'Attended', note: 'Met client at site office. Provided brochure and project walkthrough.' },
+      { id: 'h2', date: '20 May 2024', time: '11:30 AM', duration: '30 mins', status: 'Attended', note: 'Initial call to confirm interest. Client preferred weekend face-to-face.' },
     ],
   },
   {
@@ -343,7 +370,7 @@ export const siteVisits = [
     visitStatus: 'Upcoming',
     notes: 'Requested villa layouts and payment plan before the visit.',
     history: [
-      { id: 'h1', time: '09:15 AM', duration: '20 mins', status: 'Attended', note: 'Shared villa brochure over WhatsApp.' },
+      { id: 'h1', date: '30 May 2024', time: '09:15 AM', duration: '20 mins', status: 'Attended', note: 'Shared villa brochure over WhatsApp.' },
     ],
   },
   {
@@ -361,8 +388,8 @@ export const siteVisits = [
     visitStatus: 'Completed',
     notes: 'Shortlisted a 12th floor 3 BHK. Awaiting spouse approval.',
     history: [
-      { id: 'h1', time: '11:00 AM', duration: '60 mins', status: 'Attended', note: 'Full site walkthrough including sample flat.' },
-      { id: 'h2', time: '04:00 PM', duration: '25 mins', status: 'Attended', note: 'Follow-up call on pricing and floor rise.' },
+      { id: 'h1', date: '30 May 2024', time: '11:00 AM', duration: '60 mins', status: 'Attended', note: 'Full site walkthrough including sample flat.' },
+      { id: 'h2', date: '27 May 2024', time: '04:00 PM', duration: '25 mins', status: 'Attended', note: 'Follow-up call on pricing and floor rise.' },
     ],
   },
   {
@@ -380,7 +407,7 @@ export const siteVisits = [
     visitStatus: 'Cancelled',
     notes: 'Client postponed indefinitely due to travel.',
     history: [
-      { id: 'h1', time: '02:00 PM', duration: '10 mins', status: 'Cancelled', note: 'Client called to cancel the scheduled visit.' },
+      { id: 'h1', date: '28 May 2024', time: '02:00 PM', duration: '10 mins', status: 'Cancelled', note: 'Client called to cancel the scheduled visit.' },
     ],
   },
   {
@@ -398,7 +425,7 @@ export const siteVisits = [
     visitStatus: 'Upcoming',
     notes: 'Interested in park-facing units on higher floors.',
     history: [
-      { id: 'h1', time: '10:45 AM', duration: '15 mins', status: 'Attended', note: 'Confirmed visit slot for Saturday morning.' },
+      { id: 'h1', date: '26 May 2024', time: '10:45 AM', duration: '15 mins', status: 'Attended', note: 'Confirmed visit slot for Saturday morning.' },
     ],
   },
 ];
@@ -566,7 +593,7 @@ export const leads = [
 
 export const project = {
   id: 'p1',
-  name: 'AFFINITY BELGAVIA',
+  name: 'AFFINITY BELGRAVIA',
   location: 'Zirakpur, Punjab',
   hero: images.heroProject,
   totalUnits: '320',
@@ -599,10 +626,34 @@ export const project = {
   ],
 };
 
+/** Every project the partner can sell. Only Affinity Belgravia has full data so far. */
+export const projects = [
+  {
+    id: project.id,
+    name: project.name,
+    location: project.location,
+    image: project.hero,
+    configurations: '2, 3 & 4 BHK',
+    priceRange: project.priceRange,
+    available: project.available,
+    possession: project.facts.Possession,
+  },
+];
+
+/** Options for the Interest Details captured on the New Lead form. */
+export const leadInterestOptions = {
+  Project: ['Affinity Belgravia'],
+  Configuration: ['2 BHK', '3 BHK', '4 BHK'],
+  'Budget Range': ['₹1.5 - 2.0 Cr', '₹2.0 - 2.5 Cr', '₹2.5 - 3.0 Cr', '₹3.0 - 4.0 Cr', 'Above ₹4.0 Cr'],
+  'Preferred Floor': ['Ground - 5th', '5-10th', '10-15th', '15-20th', '20th & above', 'Any'],
+  Possession: ['Immediate', 'Within 6 months', 'Within 1 year', 'Dec 2026'],
+  Financing: ['Home Loan', 'Self Funded'],
+};
+
 /* -------------------------------------------------------- inventory */
 
 export const inventoryHeader = {
-  title: 'AFFINITY BELGAVIA',
+  title: 'AFFINITY BELGRAVIA',
   subtitle: 'INVENTORY',
   meta: 'Tower A • 32 Floors • 320 Units',
   image: images.heroInventory,
@@ -676,7 +727,7 @@ export const inventory = [
 /* -------------------------------------------------------- documents */
 
 export const documentsHeader = {
-  title: 'AFFINITY BELGAVIA',
+  title: 'AFFINITY BELGRAVIA',
   subtitle: 'DOCUMENTS',
   meta: 'Tower A • 32 Floors • 320 Units',
   image: images.heroInventory,
@@ -947,6 +998,7 @@ export default {
   auth,
   roleOptions,
   states,
+  citiesByState,
   employees,
   uploadDocuments,
   currentUser,
@@ -965,6 +1017,8 @@ export default {
   leadCategories,
   leads,
   project,
+  projects,
+  leadInterestOptions,
   inventoryHeader,
   inventoryTowers,
   inventory,

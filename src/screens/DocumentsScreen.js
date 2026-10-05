@@ -24,7 +24,7 @@ const TAG_ICON_BG = {
 /** Figma frame: `inventory-accordion-screen` @ 7931 (12:1797) — the documents list. */
 export default function DocumentsScreen() {
   return (
-    <Screen contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+    <Screen showBack contentContainerStyle={{ paddingBottom: spacing.xxl }}>
       <BannerHeader {...documentsHeader} />
 
       <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.md }}>

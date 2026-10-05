@@ -19,7 +19,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Icon from './Icon';
 import { colors, radius, spacing, type, shadow, borderWidth } from '../theme';
-import { images } from '../data';
+import { images, states, citiesByState } from '../data';
 
 /* ------------------------------------------------------------- Button */
 
@@ -153,8 +153,19 @@ export function SelectField({
   error,
   disabled,
   style,
+  sheetTitle,
+  searchable = options.length > 8,
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const close = () => {
+    setOpen(false);
+    setQuery('');
+  };
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? options.filter((opt) => (typeof opt === 'string' ? opt : opt.label).toLowerCase().includes(q))
+    : options;
   return (
     <View style={[{ alignSelf: 'stretch' }, style]}>
       {label ? <Text style={s.fieldLabel}>{label}</Text> : null}
@@ -175,13 +186,30 @@ export function SelectField({
       </Pressable>
       {error ? <Text style={s.fieldErrorText}>{error}</Text> : null}
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={s.modalBackdrop} onPress={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        <Pressable style={s.modalBackdrop} onPress={close}>
           <Pressable style={s.optionSheet} onPress={(e) => e.stopPropagation()}>
             <View style={s.sheetHandle} />
-            <Text style={s.sheetTitle}>{label || placeholder}</Text>
-            <ScrollView style={{ maxHeight: 340 }}>
-              {options.map((opt) => {
+            <Text style={s.sheetTitle}>{sheetTitle || label || placeholder}</Text>
+            {searchable ? (
+              <View style={[s.search, s.sheetSearch]}>
+                <Icon name="search" size={16} color={colors.muted} />
+                <TextInput
+                  style={s.searchInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search"
+                  placeholderTextColor={colors.muted}
+                  autoCorrect={false}
+                />
+              </View>
+            ) : null}
+            <ScrollView style={{ maxHeight: 340 }} keyboardShouldPersistTaps="handled">
+              {visible.length === 0 ? (
+                <Text style={[s.optionLabel, { color: colors.muted, padding: spacing.md }]}>No matches</Text>
+              ) : null}
+              {visible.map((opt) => {
                 const optLabel = typeof opt === 'string' ? opt : opt.label;
                 const optValue = typeof opt === 'string' ? opt : opt.value ?? opt.label;
                 const selected = optLabel === value;
@@ -190,7 +218,7 @@ export function SelectField({
                     key={optValue}
                     onPress={() => {
                       onChange?.(optValue);
-                      setOpen(false);
+                      close();
                     }}
                     style={[s.optionRow, selected && { backgroundColor: colors.glassTint }]}
                   >
@@ -202,12 +230,59 @@ export function SelectField({
             </ScrollView>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
-export function SearchBar({ value, onChangeText, placeholder = 'Search by name or phone', onFilterPress, style }) {
+/**
+ * State then City. The city list only opens once a state is chosen and is
+ * limited to that state's cities; changing the state clears the city.
+ * `row` lays the pair out side by side, as on the New Lead / Schedule Visit forms.
+ */
+export function StateCityFields({ state, city, onChange, row, cityIcon = 'building', stateIcon = 'map', placeholders = {} }) {
+  const cities = state ? citiesByState[state] || [] : [];
+  const statePicker = (
+    <SelectField
+      icon={stateIcon}
+      placeholder={placeholders.state || 'State'}
+      sheetTitle="Select State"
+      value={state}
+      options={states}
+      onChange={(v) => onChange({ state: v, city: v === state ? city : '' })}
+      style={row ? { flex: 1 } : undefined}
+    />
+  );
+  const cityPicker = (
+    <SelectField
+      icon={cityIcon}
+      placeholder={state || row ? placeholders.city || 'City' : 'Select state first'}
+      sheetTitle={state ? `Cities in ${state}` : 'City'}
+      value={city}
+      options={cities}
+      disabled={!state}
+      onChange={(v) => onChange({ state, city: v })}
+      style={row ? { flex: 1 } : undefined}
+    />
+  );
+  if (row) {
+    return (
+      <View style={{ flexDirection: 'row', gap: spacing.md }}>
+        {statePicker}
+        {cityPicker}
+      </View>
+    );
+  }
+  return (
+    <>
+      {statePicker}
+      {cityPicker}
+    </>
+  );
+}
+
+export function SearchBar({ value, onChangeText, placeholder = 'Search by name or phone', onFilterPress, filterCount = 0, style }) {
   const [focused, setFocused] = useState(false);
   return (
     <View style={[{ flexDirection: 'row', gap: spacing.md }, style]}>
@@ -229,8 +304,17 @@ export function SearchBar({ value, onChangeText, placeholder = 'Search by name o
         ) : null}
       </View>
       {onFilterPress ? (
-        <Pressable onPress={onFilterPress} style={s.filterBtn}>
-          <Icon name="sliders" size={18} color={colors.onSurface} />
+        <Pressable
+          onPress={onFilterPress}
+          style={[s.filterBtn, filterCount > 0 && { borderColor: colors.brandPrimary }]}
+          accessibilityLabel="Filters"
+        >
+          <Icon name="sliders" size={18} color={filterCount > 0 ? colors.brandPrimary : colors.onSurface} />
+          {filterCount > 0 ? (
+            <View style={s.filterBadge}>
+              <Text style={s.filterBadgeLabel}>{filterCount}</Text>
+            </View>
+          ) : null}
         </Pressable>
       ) : null}
     </View>
@@ -469,6 +553,60 @@ export function BottomSheet({ visible, onClose, title, children, onCloseIcon = t
   );
 }
 
+/**
+ * Filter sheet behind the list screens' filter button. Each section is a
+ * single-choice chip group; changes are staged and only applied on "Apply".
+ * `sections`: [{ id, title, options: [string], value }]
+ */
+export function FilterSheet({ visible, onClose, sections, onApply, onReset }) {
+  const [draft, setDraft] = useState({});
+  React.useEffect(() => {
+    if (visible) setDraft(Object.fromEntries(sections.map((sec) => [sec.id, sec.value])));
+    // Re-seed only when the sheet opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title="Filters">
+      <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: spacing.lg }}>
+        {sections.map((sec) => (
+          <View key={sec.id}>
+            <Text style={s.fieldLabel}>{sec.title}</Text>
+            <View style={s.filterOptions}>
+              {sec.options.map((opt) => (
+                <Chip
+                  key={opt}
+                  label={opt}
+                  selected={draft[sec.id] === opt}
+                  onPress={() => setDraft((d) => ({ ...d, [sec.id]: opt }))}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+      <View style={{ flexDirection: 'row', gap: spacing.md }}>
+        <SecondaryButton
+          label="Reset"
+          style={{ flex: 1 }}
+          onPress={() => {
+            onReset();
+            onClose();
+          }}
+        />
+        <PrimaryButton
+          label="Apply"
+          style={{ flex: 1 }}
+          onPress={() => {
+            onApply(draft);
+            onClose();
+          }}
+        />
+      </View>
+    </BottomSheet>
+  );
+}
+
 /** Centre-screen dialog, as used by the `lead-update-popup` screen. */
 export function CenterDialog({ visible, onClose, title, children }) {
   return (
@@ -698,6 +836,21 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  filterBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: colors.brandPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeLabel: { ...type.caption, fontSize: 10, lineHeight: 12, color: colors.onBrand },
+  sheetSearch: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', marginBottom: spacing.sm },
+  filterOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 
   chip: {
     height: 36,

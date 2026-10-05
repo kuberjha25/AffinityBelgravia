@@ -7,7 +7,6 @@ import {
   Divider,
   KeyValue,
   PrimaryButton,
-  SecondaryButton,
   StatusPill,
 } from '../components/ui';
 import { colors, spacing, type } from '../theme';
@@ -27,7 +26,6 @@ const PERSONAL_ICONS = {
 const PROFESSIONAL_ICONS = {
   Company: 'briefcase',
   'RERA Number': 'file-text',
-  Experience: 'clock',
   'Registration Date': 'calendar',
   Status: 'shield',
 };
@@ -82,16 +80,6 @@ export default function RegistrationDetailScreen({ route }) {
         <PrimaryButton
           label="Edit Profile"
           onPress={() => Alert.alert('Edit Profile', `Editing ${record.name}'s registration.`)}
-        />
-        <SecondaryButton
-          label="Deactivate Account"
-          onPress={() =>
-            Alert.alert('Deactivate Account', `Deactivate ${record.name}?`, [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Deactivate', style: 'destructive' },
-            ])
-          }
-          style={{ borderColor: colors.border }}
         />
       </View>
     </Screen>

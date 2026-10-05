@@ -51,6 +51,29 @@ function TabBar({ state, descriptors, navigation }) {
   );
 }
 
+export function StackTabBar({ navigation, activeRoute = 'Home' }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[s.bar, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+      {Object.entries(ICONS).map(([name, icon]) => {
+        const focused = activeRoute === name;
+        return (
+          <Pressable
+            key={name}
+            onPress={() => navigation.navigate('Main', { screen: name })}
+            style={s.item}
+            accessibilityRole="button"
+            accessibilityState={{ selected: focused }}
+          >
+            <Icon name={icon} size={22} color={focused ? colors.brandPrimary : colors.muted} />
+            <Text style={[s.label, focused && { color: colors.brandPrimary }]}>{name}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function TabNavigator() {
   return (
     <Tab.Navigator

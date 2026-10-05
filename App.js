@@ -42,6 +42,7 @@ const linking = {
       VisitDetail: 'visits/:id',
       ScheduleVisit: 'visits/schedule',
       MISReport: 'mis-report',
+      Projects: 'projects',
       ProjectDetail: 'project',
       Inventory: 'inventory',
       Documents: 'documents',

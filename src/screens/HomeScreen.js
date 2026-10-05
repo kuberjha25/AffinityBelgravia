@@ -5,7 +5,6 @@ import {
   Image,
   StyleSheet,
   Pressable,
-  ScrollView,
   Dimensions,
   FlatList,
 } from 'react-native';
@@ -43,7 +42,7 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   return (
-    <Screen contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+    <Screen showBack={route?.name === 'UserHome'} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
       <FlatList
         ref={listRef}
         data={homeBanners}
@@ -80,25 +79,21 @@ export default function HomeScreen({ navigation, route }) {
       <Text style={s.welcome}>{`Welcome, ${profile.firstName || currentUser.firstName}`}</Text>
 
       <Text style={s.groupLabel}>At a Glance</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: H_PADDING, gap: spacing.md }}
-      >
+      <View style={s.glanceRow}>
         {homeGlance.map((g) => (
           <Pressable key={g.id} style={s.glanceCard} onPress={() => go(g.route)}>
-            <Text style={s.glanceValue}>{g.value}</Text>
-            <Text style={s.glanceLabel}>{g.label}</Text>
+            <Text style={s.glanceValue} numberOfLines={1} adjustsFontSizeToFit>{g.value}</Text>
+            <FitLines lines={g.lines} style={s.glanceLabel} />
           </Pressable>
         ))}
-      </ScrollView>
+      </View>
 
       <Text style={s.groupLabel}>Quick Access</Text>
       <View style={s.grid}>
         {quickAccess.map((q) => (
           <Pressable key={q.id} style={s.tile} onPress={() => go(q.route)}>
             <Icon name={q.icon} size={22} color={colors.brandPrimary} />
-            <Text style={s.tileLabel} numberOfLines={2}>{q.label}</Text>
+            <FitLines lines={q.label.split(' ')} style={s.tileLabel} />
           </Pressable>
         ))}
       </View>
@@ -106,7 +101,32 @@ export default function HomeScreen({ navigation, route }) {
   );
 }
 
-const TILE_W = (width - H_PADDING * 2 - spacing.md * 3) / 4;
+/**
+ * One Text per line, each shrinking to fit its own width, so a label like
+ * "Registrations" scales down on narrow screens / large system fonts instead
+ * of breaking mid-word ("Registrati-ons").
+ */
+function FitLines({ lines, style }) {
+  return (
+    <View style={{ alignSelf: 'stretch' }}>
+      {lines.map((line) => (
+        <Text
+          key={line}
+          style={style}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
+          maxFontSizeMultiplier={1.3}
+        >
+          {line}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+const TILE_GAP = spacing.sm;
+const TILE_W = Math.floor((width - H_PADDING * 2 - TILE_GAP * 3) / 4);
 
 const s = StyleSheet.create({
   banner: {
@@ -138,36 +158,42 @@ const s = StyleSheet.create({
     marginBottom: spacing.md,
   },
 
+  glanceRow: { flexDirection: 'row', gap: TILE_GAP, paddingHorizontal: H_PADDING },
   glanceCard: {
-    width: 92,
-    height: 94,
+    flex: 1,
+    minHeight: 80,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceSecondary,
     borderWidth: borderWidth.default,
     borderColor: colors.border,
-    padding: spacing.md,
-    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...shadow.card,
   },
-  glanceValue: { ...type.title, color: colors.brandPrimary },
-  glanceLabel: { ...type.caption, color: colors.onSurfaceTertiary },
+  glanceValue: { ...type.title, color: colors.brandPrimary, textAlign: 'center' },
+  glanceLabel: { ...type.caption, fontSize: 11, lineHeight: 15, color: colors.muted, textAlign: 'center' },
 
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
+    gap: TILE_GAP,
     paddingHorizontal: H_PADDING,
   },
   tile: {
     width: TILE_W,
-    height: 84,
+    minHeight: 80,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceSecondary,
     borderWidth: borderWidth.default,
     borderColor: colors.border,
-    padding: spacing.sm + 2,
-    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
     ...shadow.card,
   },
-  tileLabel: { ...type.caption, fontSize: 11, lineHeight: 14, color: colors.onSurface },
+  tileLabel: { ...type.caption, fontSize: 12, lineHeight: 16, color: colors.onSurface, textAlign: 'center' },
 });

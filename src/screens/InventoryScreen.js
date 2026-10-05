@@ -22,7 +22,7 @@ export default function InventoryScreen() {
   );
 
   return (
-    <Screen contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+    <Screen showBack contentContainerStyle={{ paddingBottom: spacing.xxl }}>
       <BannerHeader {...inventoryHeader} />
 
       <ChipRow

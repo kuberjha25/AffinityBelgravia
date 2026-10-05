@@ -22,8 +22,9 @@ export function AppProvider({ children }) {
     basic: {},
     knowsEmployee: 'yes',
     employee: '',
-    social: { facebook: 'https://facebook.com/alex_gillco', instagram: '', youtube: '' },
+    social: { facebook: '', instagram: '', youtube: '' },
     company: '',
+    reraNumber: '',
     documents: data.uploadDocuments,
   });
 
@@ -39,20 +40,16 @@ export function AppProvider({ children }) {
       name: lead.name || 'New Lead',
       phone: lead.phone || '',
       email: lead.email || '',
-      project: `${data.project.name} - ${lead.configuration || '3 BHK'}`,
+      project: [lead.interest?.Project || 'Affinity Belgravia', lead.interest?.Configuration]
+        .filter(Boolean)
+        .join(' - '),
       type: lead.type || 'Warm',
       status: 'In Progress',
       source: lead.category || 'Walk-in',
       activeOn: lead.visitDate || 'Today',
       followUpDate: lead.visitDate || '—',
-      interest: {
-        Project: 'Affinity Belgravia',
-        Configuration: lead.configuration || '3 BHK',
-        'Budget Range': '₹1.5 - 2.0 Cr',
-        'Preferred Floor': 'Any',
-        Possession: 'Dec 2026',
-        Financing: 'Home Loan',
-      },
+      // Only what the partner actually entered on the New Lead form.
+      interest: { ...(lead.interest || {}) },
       note: lead.remarks || 'No remarks added yet.',
       history: [
         {

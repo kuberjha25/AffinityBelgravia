@@ -3,9 +3,19 @@ import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
 import DateField from '../components/DateField';
-import { TextField, SelectField, PrimaryButton } from '../components/ui';
+import { TextField, SelectField, StateCityFields, PrimaryButton } from '../components/ui';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { leadTypes, project, states, visitTimeSlots } from '../data';
+import { leadTypes, project, visitTimeSlots } from '../data';
+
+/**
+ * Who the visit is for. "Myself" = the broker visiting the site personally
+ * (their own details are pre-filled); "Client" = the broker booking for a
+ * customer, whose details are entered manually.
+ */
+const VISITOR_OPTIONS = [
+  { id: 'broker', label: 'Myself', icon: 'user', hint: 'You are visiting the site yourself. Your details are filled in below.' },
+  { id: 'client', label: 'Client', icon: 'users', hint: "You are booking a visit for your client. Enter the client's details below." },
+];
 import { useApp } from '../store';
 
 const TYPE_TONE = {
@@ -16,12 +26,11 @@ const TYPE_TONE = {
 
 /** Figma frame: `schedule-visit-screen` (12:1176). */
 export default function ScheduleVisitScreen({ navigation }) {
-  const { addVisit } = useApp();
+  const { addVisit, profile } = useApp();
   const [role, setRole] = useState('broker');
+  const selfDetails = { name: profile.name, phone: profile.phone, email: profile.email };
   const [form, setForm] = useState({
-    name: '',
-    phone: '',
-    email: '',
+    ...selfDetails,
     address: '',
     city: '',
     state: '',
@@ -33,6 +42,19 @@ export default function ScheduleVisitScreen({ navigation }) {
   });
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
+
+  const chooseVisitor = (id) => {
+    setRole(id);
+    setForm((f) => {
+      if (id === 'broker') return { ...f, ...selfDetails };
+      // Switching to Client: clear the broker's own details so they aren't submitted by mistake.
+      const cleared = {};
+      Object.keys(selfDetails).forEach((k) => {
+        cleared[k] = f[k] === selfDetails[k] ? '' : f[k];
+      });
+      return { ...f, ...cleared };
+    });
+  };
 
   const create = () => {
     if (!form.name.trim()) {
@@ -54,35 +76,38 @@ export default function ScheduleVisitScreen({ navigation }) {
         <PageTitle>Schedule Project Visit</PageTitle>
 
         <View style={{ paddingHorizontal: spacing.xl, gap: spacing.md }}>
+          <Text style={s.group}>Who is visiting?</Text>
           <View style={{ flexDirection: 'row', gap: spacing.md }}>
-            {[
-              { id: 'broker', label: 'Broker', icon: 'user' },
-              { id: 'client', label: 'Client', icon: 'user' },
-            ].map((opt) => {
+            {VISITOR_OPTIONS.map((opt) => {
               const active = role === opt.id;
               return (
                 <Pressable
                   key={opt.id}
-                  onPress={() => setRole(opt.id)}
+                  onPress={() => chooseVisitor(opt.id)}
                   style={[s.roleCard, active && s.roleCardActive]}
                 >
                   <Icon name={opt.icon} size={18} color={active ? colors.onSurface : colors.muted} />
-                  <Text style={[s.roleLabel, active && { color: colors.onSurface }]}>{opt.label}</Text>
+                  <Text style={[s.roleLabel, active && { color: colors.onSurface }]} numberOfLines={1} adjustsFontSizeToFit>
+                    {opt.label}
+                  </Text>
                   <View style={[s.radio, active && { backgroundColor: colors.brandPrimary }]} />
                 </Pressable>
               );
             })}
           </View>
+          <Text style={s.hint}>{VISITOR_OPTIONS.find((o) => o.id === role).hint}</Text>
 
-          <TextField icon="user" placeholder="Enter complete name" value={form.name} onChangeText={set('name')} />
+          <TextField icon="user" placeholder={role === 'client' ? "Enter client's complete name" : 'Enter complete name'} value={form.name} onChangeText={set('name')} />
           <TextField icon="phone" placeholder="Enter mobile number" value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" />
           <TextField icon="mail" placeholder="Enter email address" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" />
           <TextField icon="map-pin" placeholder="Enter complete address" value={form.address} onChangeText={set('address')} />
 
-          <View style={{ flexDirection: 'row', gap: spacing.md }}>
-            <TextField icon="building" placeholder="Enter city" value={form.city} onChangeText={set('city')} style={{ flex: 1 }} />
-            <SelectField icon="map" placeholder="Select state" value={form.state} options={states} onChange={set('state')} style={{ flex: 1 }} />
-          </View>
+          <StateCityFields
+            row
+            state={form.state}
+            city={form.city}
+            onChange={({ state, city }) => setForm((f) => ({ ...f, state, city }))}
+          />
 
           <SelectField
             icon="building"
@@ -148,6 +173,8 @@ const s = StyleSheet.create({
   },
   roleCardActive: { borderColor: colors.brandPrimary, borderWidth: borderWidth.selected },
   roleLabel: { ...type.body, color: colors.muted, flex: 1 },
+  group: { ...type.bodySmall, color: colors.onSurfaceTertiary },
+  hint: { ...type.caption, color: colors.muted, marginTop: -spacing.xs },
   radio: { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.border },
 
   typeChip: {

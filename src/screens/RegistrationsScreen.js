@@ -11,9 +11,13 @@ import {
   Segmented,
   StatusPill,
   EmptyState,
+  FilterSheet,
 } from '../components/ui';
+import { parseDisplayDate } from '../components/DateField';
 import { colors, spacing, type, radius } from '../theme';
 import { registrationFilters } from '../data';
+
+const SORTS = ['Newest first', 'Oldest first', 'Name A-Z'];
 import { useApp } from '../store';
 
 /** Figma frame: `complete-profile` @ 3977 (12:549) — the registrations list. */
@@ -22,19 +26,26 @@ export default function RegistrationsScreen({ navigation }) {
   const [tab, setTab] = useState('Pending');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
+  const [sort, setSort] = useState(SORTS[0]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return registrations.filter((r) => {
+    const list = registrations.filter((r) => {
       if (r.status !== tab) return false;
       if (filter !== 'All' && r.type !== filter) return false;
       if (!q) return true;
-      return r.name.toLowerCase().includes(q) || r.phone.includes(q);
+      return r.name.toLowerCase().includes(q) || r.phone.replace(/s/g, '').includes(q.replace(/s/g, ''));
     });
-  }, [registrations, tab, filter, query]);
+    if (sort === 'Name A-Z') return [...list].sort((a, b) => a.name.localeCompare(b.name));
+    const dir = sort === 'Oldest first' ? 1 : -1;
+    return [...list].sort((a, b) => dir * (parseDisplayDate(a.date) - parseDisplayDate(b.date)));
+  }, [registrations, tab, filter, sort, query]);
+
+  const activeFilters = (filter !== 'All' ? 1 : 0) + (sort !== SORTS[0] ? 1 : 0);
 
   return (
-    <Screen>
+    <Screen showBack>
       <PageTitle
         subtitle="View and track all registered influencers and brokers"
         right={
@@ -60,7 +71,8 @@ export default function RegistrationsScreen({ navigation }) {
       <SearchBar
         value={query}
         onChangeText={setQuery}
-        onFilterPress={() => setFilter('All')}
+        onFilterPress={() => setFiltersOpen(true)}
+        filterCount={activeFilters}
         style={{ marginHorizontal: spacing.xl, marginTop: spacing.lg }}
       />
 
@@ -102,6 +114,23 @@ export default function RegistrationsScreen({ navigation }) {
           />
         ) : null}
       </View>
+
+      <FilterSheet
+        visible={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        sections={[
+          { id: 'type', title: 'Registration Type', options: registrationFilters, value: filter },
+          { id: 'sort', title: 'Sort By', options: SORTS, value: sort },
+        ]}
+        onApply={(v) => {
+          setFilter(v.type);
+          setSort(v.sort);
+        }}
+        onReset={() => {
+          setFilter('All');
+          setSort(SORTS[0]);
+        }}
+      />
     </Screen>
   );
 }

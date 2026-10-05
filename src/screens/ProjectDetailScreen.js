@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Screen from '../components/Screen';
 import Icon from '../components/Icon';
@@ -13,7 +13,7 @@ export default function ProjectDetailScreen({ navigation }) {
   const [config, setConfig] = useState(project.configurations[1].id);
 
   return (
-    <Screen contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+    <Screen showBack contentContainerStyle={{ paddingBottom: spacing.xxl }}>
       <View style={s.hero}>
         <Image source={project.hero} style={imageFill} resizeMode="cover" />
         <LinearGradient colors={['rgba(28,27,25,0.1)', 'rgba(28,27,25,0.75)']} style={StyleSheet.absoluteFill} />
@@ -53,22 +53,18 @@ export default function ProjectDetailScreen({ navigation }) {
         <Text style={s.sectionTitle}>Unit Configurations</Text>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md, paddingTop: spacing.md }}
-      >
+      <View style={s.configRow}>
         {project.configurations.map((c) => {
           const active = config === c.id;
           return (
             <Pressable key={c.id} onPress={() => setConfig(c.id)} style={[s.configCard, active && s.configCardActive]}>
               <Text style={s.configTitle}>{c.title}</Text>
-              <Text style={s.configArea}>{c.area}</Text>
-              <Text style={s.configPrice}>{c.price}</Text>
+              <Text style={s.configArea} numberOfLines={1} adjustsFontSizeToFit>{c.area}</Text>
+              <Text style={s.configPrice} numberOfLines={1} adjustsFontSizeToFit>{c.price}</Text>
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
 
       <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.lg }}>
         <PrimaryButton label="View Inventory" onPress={() => navigation.navigate('Inventory')} />
@@ -127,13 +123,15 @@ const s = StyleSheet.create({
 
   sectionTitle: { ...type.heading, color: colors.onSurface },
 
+  configRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   configCard: {
-    width: 148,
+    flex: 1,
     borderRadius: radius.lg,
     borderWidth: borderWidth.default,
     borderColor: colors.border,
     backgroundColor: colors.surfaceSecondary,
-    padding: spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   configCardActive: { borderColor: colors.brandPrimary, borderWidth: borderWidth.selected },
   configTitle: { ...type.body, color: colors.onSurface },

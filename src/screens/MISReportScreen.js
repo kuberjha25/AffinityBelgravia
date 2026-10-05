@@ -11,7 +11,7 @@ export default function MISReportScreen() {
   const [period, setPeriod] = useState('Daily');
 
   return (
-    <Screen>
+    <Screen showBack>
       <PageTitle>MIS Report</PageTitle>
 
       <ChipRow

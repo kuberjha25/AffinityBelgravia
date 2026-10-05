@@ -67,8 +67,13 @@ export default function LeadDetailScreen({ navigation, route }) {
 
         <Card>
           <Text style={s.cardTitle}>Interest Details</Text>
+          {Object.values(lead.interest || {}).some(Boolean) ? null : (
+            <Text style={s.interestEmpty}>
+              No interest details were captured for this lead. Add them while creating a lead.
+            </Text>
+          )}
           <View style={s.interestGrid}>
-            {Object.entries(lead.interest).map(([label, value]) => (
+            {Object.entries(lead.interest || {}).filter(([, value]) => value).map(([label, value]) => (
               <View key={label} style={s.interestCell}>
                 <Text style={s.interestLabel}>{label}</Text>
                 <Text style={s.interestValue}>{value}</Text>
@@ -205,6 +210,7 @@ const s = StyleSheet.create({
   interestCell: { width: '50%', paddingBottom: spacing.lg, paddingRight: spacing.md },
   interestLabel: { ...type.caption, color: colors.brandPrimary },
   interestValue: { ...type.body, color: colors.onSurface, marginTop: 2 },
+  interestEmpty: { ...type.bodySmall, color: colors.muted, marginTop: spacing.md },
 
   historyRow: { flexDirection: 'row', gap: spacing.md },
   histDate: { ...type.caption, color: colors.brandPrimary },

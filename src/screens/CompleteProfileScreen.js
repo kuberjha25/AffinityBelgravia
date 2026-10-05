@@ -5,9 +5,9 @@ import KeyboardActionBar, { ACTION_BAR_HEIGHT } from '../components/KeyboardActi
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '../components/Icon';
 import DateField from '../components/DateField';
-import { WizardHeader, TextField, SelectField, PrimaryButton, Eyebrow } from '../components/ui';
+import { WizardHeader, TextField, StateCityFields, PrimaryButton, Eyebrow } from '../components/ui';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { roleOptions, states } from '../data';
+import { roleOptions } from '../data';
 import { useApp } from '../store';
 
 /** Figma frame: `complete-profile` (12:126) — wizard step 1. */
@@ -48,6 +48,7 @@ export default function CompleteProfileScreen({ navigation }) {
             total={3}
             title="Complete Profile"
             subtitle="Please fill in your details to get started"
+            onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
           />
 
           <View style={s.body}>
@@ -78,8 +79,11 @@ export default function CompleteProfileScreen({ navigation }) {
               <TextField icon="mail" placeholder="Email Address" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" />
               <TextField icon="phone" placeholder="Mobile Number" value={form.mobile} onChangeText={set('mobile')} keyboardType="phone-pad" />
               <TextField icon="map-pin" placeholder="Address" value={form.address} onChangeText={set('address')} />
-              <TextField icon="building" placeholder="City" value={form.city} onChangeText={set('city')} />
-              <SelectField icon="building" placeholder="State" value={form.state} options={states} onChange={set('state')} />
+              <StateCityFields
+                state={form.state}
+                city={form.city}
+                onChange={({ state, city }) => setForm((f) => ({ ...f, state, city }))}
+              />
               <TextField icon="hash" placeholder="PIN Code" value={form.pin} onChangeText={set('pin')} keyboardType="number-pad" maxLength={6} />
               <DateField placeholder="Date of Birth" value={form.dob} onChange={set('dob')} />
               <DateField placeholder="Date of Anniversary" value={form.anniversary} onChange={set('anniversary')} />

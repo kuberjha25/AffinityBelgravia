@@ -16,10 +16,16 @@ export default function ProfileStepTwoScreen({ navigation }) {
   const [employee, setEmployee] = useState(onboarding.employee);
   const [social, setSocial] = useState(onboarding.social);
 
+  const showSocial = onboarding.role !== 'partner';
+
   const setSocialField = (key) => (value) => setSocial((sv) => ({ ...sv, [key]: value }));
 
   const onContinue = () => {
-    patchOnboarding({ knowsEmployee: knows, employee, social });
+    patchOnboarding({
+      knowsEmployee: knows,
+      employee: knows === 'yes' ? employee : '',
+      social: showSocial ? social : { facebook: '', instagram: '', youtube: '' },
+    });
     navigation.navigate('ChannelPartnerDetails');
   };
 
@@ -53,8 +59,13 @@ export default function ProfileStepTwoScreen({ navigation }) {
                     onPress={() => setKnows(opt.id)}
                     style={[s.toggle, active && s.toggleActive]}
                   >
-                    <Icon name={opt.icon} size={14} color={colors.onSurfaceInverse} strokeWidth={2} />
-                    <Text style={s.toggleLabel}>{opt.label}</Text>
+                    <Icon
+                      name={opt.icon}
+                      size={14}
+                      color={active ? colors.onSurfaceInverse : colors.muted}
+                      strokeWidth={2}
+                    />
+                    <Text style={[s.toggleLabel, active && s.toggleLabelActive]}>{opt.label}</Text>
                   </Pressable>
                 );
               })}
@@ -73,6 +84,9 @@ export default function ProfileStepTwoScreen({ navigation }) {
               </>
             ) : null}
 
+            {/* Partners register as businesses, so social profiles are only asked of influencers / freelancers. */}
+            {showSocial ? (
+            <>
             <Text style={[s.label, { marginTop: spacing.xl }]}>Social Media Profiles</Text>
             <View style={{ gap: spacing.md }}>
               <TextField
@@ -97,6 +111,8 @@ export default function ProfileStepTwoScreen({ navigation }) {
                 autoCapitalize="none"
               />
             </View>
+            </>
+            ) : null}
 
             <PrimaryButton label="Continue" iconRight="arrow-right" onPress={onContinue} style={{ marginTop: spacing.xxl }} />
           </View>
@@ -120,14 +136,20 @@ const s = StyleSheet.create({
     flex: 1,
     height: 52,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceInverse,
+    backgroundColor: colors.surfaceSecondary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    borderWidth: borderWidth.selected,
-    borderColor: colors.surfaceInverse,
+    borderWidth: borderWidth.default,
+    borderColor: colors.border,
   },
-  toggleActive: { borderColor: colors.brandPrimary },
-  toggleLabel: { ...type.body, color: colors.onSurfaceInverse },
+  // Only the chosen answer is dark; the other stays light so the choice is obvious.
+  toggleActive: {
+    backgroundColor: colors.surfaceInverse,
+    borderWidth: borderWidth.selected,
+    borderColor: colors.brandPrimary,
+  },
+  toggleLabel: { ...type.body, color: colors.onSurfaceTertiary },
+  toggleLabelActive: { color: colors.onSurfaceInverse },
 });

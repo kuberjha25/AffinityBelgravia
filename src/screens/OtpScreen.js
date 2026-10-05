@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { PrimaryButton } from '../components/ui';
+import Icon from '../components/Icon';
 import KeyboardDockedSheet from '../components/KeyboardDockedSheet';
 import { BrandCard, SocialRow } from './LoginScreen';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
@@ -72,6 +73,10 @@ export default function OtpScreen({ navigation, route }) {
             Enter the {auth.otpLength}-digit code sent to{' '}
             <Text style={s.leadStrong}>{`${auth.dialCode} ${mobile}`}</Text>
           </Text>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={8} style={s.changeNumber}>
+            <Icon name="chevron-left" size={14} color={colors.brandPrimary} />
+            <Text style={s.changeNumberLabel}>Change number</Text>
+          </Pressable>
 
           <View style={s.otpRow}>
             {code.map((digit, i) => (
@@ -131,10 +136,13 @@ const s = StyleSheet.create({
   title: { ...type.display, color: colors.onSurface },
   lead: { ...type.bodySmall, color: colors.muted, marginTop: spacing.sm },
   leadStrong: { ...type.bodySmall, color: colors.onSurface },
+  changeNumber: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', marginTop: spacing.sm },
+  changeNumberLabel: { ...type.bodySmall, color: colors.brandPrimary },
 
   otpRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
   otpBox: {
     flex: 1,
+    minWidth: 0,
     height: 56,
     borderRadius: radius.lg,
     borderWidth: borderWidth.default,

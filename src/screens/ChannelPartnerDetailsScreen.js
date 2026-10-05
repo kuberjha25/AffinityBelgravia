@@ -12,9 +12,10 @@ import { useApp } from '../store';
 export default function ChannelPartnerDetailsScreen({ navigation }) {
   const { onboarding, completeOnboarding, toggleDocument } = useApp();
   const [company, setCompany] = useState(onboarding.company);
+  const [reraNumber, setReraNumber] = useState(onboarding.reraNumber);
 
   const submit = () => {
-    completeOnboarding({ company });
+    completeOnboarding({ company, reraNumber });
     navigation.navigate('ThankYou');
   };
 
@@ -42,6 +43,15 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
               placeholder="Enter registered business name"
               value={company}
               onChangeText={setCompany}
+            />
+
+            <Text style={[s.fieldLabel, { marginTop: spacing.lg }]}>RERA Registration Number</Text>
+            <TextField
+              icon="file-text"
+              placeholder="Enter RERA registration number"
+              value={reraNumber}
+              onChangeText={(v) => setReraNumber(v.toUpperCase())}
+              autoCapitalize="characters"
             />
 
             <Text style={[s.groupLabel, { marginTop: spacing.xl }]}>Upload Documents</Text>

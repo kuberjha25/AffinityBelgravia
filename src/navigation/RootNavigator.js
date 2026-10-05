@@ -1,6 +1,7 @@
 import React from 'react';
+import { View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import TabNavigator from './TabNavigator';
+import TabNavigator, { StackTabBar } from './TabNavigator';
 
 import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/LoginScreen';
@@ -16,6 +17,7 @@ import RegistrationDetailScreen from '../screens/RegistrationDetailScreen';
 import VisitDetailScreen from '../screens/VisitDetailScreen';
 import ScheduleVisitScreen from '../screens/ScheduleVisitScreen';
 import MISReportScreen from '../screens/MISReportScreen';
+import ProjectsScreen from '../screens/ProjectsScreen';
 import ProjectDetailScreen from '../screens/ProjectDetailScreen';
 import InventoryScreen from '../screens/InventoryScreen';
 import DocumentsScreen from '../screens/DocumentsScreen';
@@ -27,6 +29,24 @@ import TermsScreen from '../screens/TermsScreen';
 import AboutScreen from '../screens/AboutScreen';
 
 const Stack = createNativeStackNavigator();
+
+function withMainTabBar(Component) {
+  return function ScreenWithMainTabBar(props) {
+    return (
+      <View style={{ flex: 1 }}>
+        <Component {...props} />
+        <StackTabBar navigation={props.navigation} />
+      </View>
+    );
+  };
+}
+
+const RegistrationsWithTabBar = withMainTabBar(RegistrationsScreen);
+const MISReportWithTabBar = withMainTabBar(MISReportScreen);
+const ProjectsWithTabBar = withMainTabBar(ProjectsScreen);
+const ProjectDetailWithTabBar = withMainTabBar(ProjectDetailScreen);
+const InventoryWithTabBar = withMainTabBar(InventoryScreen);
+const DocumentsWithTabBar = withMainTabBar(DocumentsScreen);
 
 export default function RootNavigator() {
   return (
@@ -52,14 +72,15 @@ export default function RootNavigator() {
         component={HomeScreen}
         initialParams={{ variant: 'user' }}
       />
-      <Stack.Screen name="Registrations" component={RegistrationsScreen} />
+      <Stack.Screen name="Registrations" component={RegistrationsWithTabBar} />
       <Stack.Screen name="RegistrationDetail" component={RegistrationDetailScreen} />
       <Stack.Screen name="VisitDetail" component={VisitDetailScreen} />
       <Stack.Screen name="ScheduleVisit" component={ScheduleVisitScreen} />
-      <Stack.Screen name="MISReport" component={MISReportScreen} />
-      <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
-      <Stack.Screen name="Inventory" component={InventoryScreen} />
-      <Stack.Screen name="Documents" component={DocumentsScreen} />
+      <Stack.Screen name="MISReport" component={MISReportWithTabBar} />
+      <Stack.Screen name="Projects" component={ProjectsWithTabBar} />
+      <Stack.Screen name="ProjectDetail" component={ProjectDetailWithTabBar} />
+      <Stack.Screen name="Inventory" component={InventoryWithTabBar} />
+      <Stack.Screen name="Documents" component={DocumentsWithTabBar} />
       <Stack.Screen name="LeadDetail" component={LeadDetailScreen} />
       <Stack.Screen name="NewLead" component={NewLeadScreen} />
       <Stack.Screen name="NewsDetail" component={NewsDetailScreen} />

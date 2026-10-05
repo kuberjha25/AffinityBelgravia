@@ -13,6 +13,7 @@ import {
 } from '../components/ui';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
 import { useApp } from '../store';
+import { parseDisplayDate } from '../components/DateField';
 
 /** Figma frame: `visit-detail-screen` (12:1020). */
 export default function VisitDetailScreen({ route }) {
@@ -22,8 +23,12 @@ export default function VisitDetailScreen({ route }) {
   const [expanded, setExpanded] = useState(null);
 
   const history = useMemo(() => {
-    const list = [...(visit.history || [])];
-    return order === 'Latest First' ? list : list.reverse();
+    // Sort by date. History is recorded newest-first, so undated or same-day
+    // entries fall back to that recorded order (reversed for Oldest First).
+    const list = (visit.history || []).map((h, i) => ({ h, i, t: parseDisplayDate(h.date) }));
+    const dir = order === 'Latest First' ? -1 : 1;
+    list.sort((a, b) => (a.t && b.t && a.t !== b.t ? dir * (a.t - b.t) : -dir * (a.i - b.i)));
+    return list.map((x) => x.h);
   }, [visit.history, order]);
 
   const endVisit = () => updateVisit(visit.id, { visitStatus: 'Completed', status: 'Completed' });
@@ -147,7 +152,9 @@ export default function VisitDetailScreen({ route }) {
                 style={{ flex: 1 }}
                 onPress={() => setExpanded(expanded === h.id ? null : h.id)}
               >
-                <View style={s.timelineChip} />
+                <View style={s.timelineChip}>
+                  <Text style={s.timelineChipLabel}>{h.date || 'Visit'}</Text>
+                </View>
                 <Card style={{ marginTop: spacing.sm, flexDirection: 'row', gap: spacing.md }}>
                   <View style={{ width: 74 }}>
                     <Text style={s.histTime}>{h.time}</Text>
@@ -200,11 +207,15 @@ const s = StyleSheet.create({
   timelineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brandPrimary },
   timelineLine: { flex: 1, width: 1, backgroundColor: colors.border, marginTop: 4 },
   timelineChip: {
-    width: 96,
-    height: 20,
+    alignSelf: 'flex-start',
+    minWidth: 96,
+    height: 24,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.sm,
-    backgroundColor: colors.brand,
+    backgroundColor: colors.brandPrimary,
+    justifyContent: 'center',
   },
+  timelineChipLabel: { ...type.caption, color: colors.onBrand },
   histTime: { ...type.body, color: colors.onSurface },
   histDuration: { ...type.caption, color: colors.muted, marginTop: 2 },
   histNote: { ...type.bodySmall, color: colors.muted, marginTop: spacing.sm },

@@ -10,10 +10,14 @@ import {
   StatusPill,
   EmptyState,
   toneForStatus,
+  FilterSheet,
 } from '../components/ui';
+import { parseDisplayDate } from '../components/DateField';
 import { colors, spacing, type } from '../theme';
 import { visitFilters } from '../data';
 import { useApp } from '../store';
+
+const SORTS = ['Latest visit first', 'Earliest visit first', 'Name A-Z'];
 
 const MATCH = {
   Upcoming: ['Confirmed', 'Pending'],
@@ -26,15 +30,31 @@ export default function SiteVisitsScreen({ navigation }) {
   const { visits } = useApp();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
+  const [projectFilter, setProjectFilter] = useState('All');
+  const [sort, setSort] = useState(SORTS[0]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const projectOptions = useMemo(
+    () => ['All', ...Array.from(new Set(visits.map((v) => v.project)))],
+    [visits]
+  );
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return visits.filter((v) => {
+    const list = visits.filter((v) => {
       if (filter !== 'All' && !MATCH[filter].includes(v.status)) return false;
+      if (projectFilter !== 'All' && v.project !== projectFilter) return false;
       if (!q) return true;
-      return v.name.toLowerCase().includes(q) || (v.phone || '').includes(q);
+      return v.name.toLowerCase().includes(q) || (v.phone || '').replace(/s/g, '').includes(q.replace(/s/g, ''));
     });
-  }, [visits, filter, query]);
+    if (sort === 'Name A-Z') return [...list].sort((a, b) => a.name.localeCompare(b.name));
+    const dir = sort === 'Earliest visit first' ? 1 : -1;
+    const t = (v) => parseDisplayDate(v.date) || Date.now();
+    return [...list].sort((a, b) => dir * (t(a) - t(b)));
+  }, [visits, filter, projectFilter, sort, query]);
+
+  const activeFilters =
+    (filter !== 'All' ? 1 : 0) + (projectFilter !== 'All' ? 1 : 0) + (sort !== SORTS[0] ? 1 : 0);
 
   return (
     <Screen>
@@ -55,7 +75,8 @@ export default function SiteVisitsScreen({ navigation }) {
       <SearchBar
         value={query}
         onChangeText={setQuery}
-        onFilterPress={() => setFilter('All')}
+        onFilterPress={() => setFiltersOpen(true)}
+        filterCount={activeFilters}
         style={{ marginHorizontal: spacing.xl }}
       />
 
@@ -102,6 +123,26 @@ export default function SiteVisitsScreen({ navigation }) {
           <EmptyState icon="calendar" title="No visits found" body="Adjust the filter or schedule a new visit." />
         ) : null}
       </View>
+
+      <FilterSheet
+        visible={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        sections={[
+          { id: 'status', title: 'Visit Status', options: visitFilters, value: filter },
+          { id: 'project', title: 'Project', options: projectOptions, value: projectFilter },
+          { id: 'sort', title: 'Sort By', options: SORTS, value: sort },
+        ]}
+        onApply={(v) => {
+          setFilter(v.status);
+          setProjectFilter(v.project);
+          setSort(v.sort);
+        }}
+        onReset={() => {
+          setFilter('All');
+          setProjectFilter('All');
+          setSort(SORTS[0]);
+        }}
+      />
     </Screen>
   );
 }

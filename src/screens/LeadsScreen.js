@@ -10,9 +10,13 @@ import {
   StatusPill,
   EmptyState,
   toneForStatus,
+  FilterSheet,
 } from '../components/ui';
+import { parseDisplayDate } from '../components/DateField';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { leadFilters } from '../data';
+import { leadFilters, leadStatuses } from '../data';
+
+const SORTS = ['Recently active', 'Oldest first', 'Name A-Z'];
 import { useApp } from '../store';
 
 const TYPE_COLOR = {
@@ -26,6 +30,9 @@ export default function LeadsScreen({ navigation }) {
   const { leads } = useApp();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
+  const [leadType, setLeadType] = useState('All');
+  const [sort, setSort] = useState(SORTS[0]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const counts = useMemo(() => {
     const map = {};
@@ -42,12 +49,21 @@ export default function LeadsScreen({ navigation }) {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return leads.filter((l) => {
+    const list = leads.filter((l) => {
       if (filter !== 'All' && l.status !== filter) return false;
+      if (leadType !== 'All' && l.type !== leadType) return false;
       if (!q) return true;
-      return l.name.toLowerCase().includes(q) || l.phone.includes(q);
+      return l.name.toLowerCase().includes(q) || l.phone.replace(/s/g, '').includes(q.replace(/s/g, ''));
     });
-  }, [leads, filter, query]);
+    if (sort === 'Name A-Z') return [...list].sort((a, b) => a.name.localeCompare(b.name));
+    const dir = sort === 'Oldest first' ? 1 : -1;
+    // New leads have no parseable date yet ("Today"), so they sort as newest.
+    const t = (l) => parseDisplayDate(l.activeOn) || Date.now();
+    return [...list].sort((a, b) => dir * (t(a) - t(b)));
+  }, [leads, filter, leadType, sort, query]);
+
+  const activeFilters =
+    (filter !== 'All' ? 1 : 0) + (leadType !== 'All' ? 1 : 0) + (sort !== SORTS[0] ? 1 : 0);
 
   return (
     <Screen>
@@ -68,7 +84,8 @@ export default function LeadsScreen({ navigation }) {
       <SearchBar
         value={query}
         onChangeText={setQuery}
-        onFilterPress={() => setFilter('All')}
+        onFilterPress={() => setFiltersOpen(true)}
+        filterCount={activeFilters}
         style={{ marginHorizontal: spacing.xl }}
       />
 
@@ -112,6 +129,26 @@ export default function LeadsScreen({ navigation }) {
           <EmptyState icon="users" title="No leads found" body="Try another filter or add a new lead." />
         ) : null}
       </View>
+
+      <FilterSheet
+        visible={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        sections={[
+          { id: 'status', title: 'Lead Status', options: ['All', ...leadStatuses], value: filter },
+          { id: 'type', title: 'Lead Type', options: ['All', 'Hot', 'Warm', 'Cold'], value: leadType },
+          { id: 'sort', title: 'Sort By', options: SORTS, value: sort },
+        ]}
+        onApply={(v) => {
+          setFilter(v.status);
+          setLeadType(v.type);
+          setSort(v.sort);
+        }}
+        onReset={() => {
+          setFilter('All');
+          setLeadType('All');
+          setSort(SORTS[0]);
+        }}
+      />
     </Screen>
   );
 }

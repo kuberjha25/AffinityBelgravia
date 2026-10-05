@@ -3,9 +3,18 @@ import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
 import DateField from '../components/DateField';
-import { TextField, SelectField, PrimaryButton } from '../components/ui';
+import { TextField, SelectField, StateCityFields, PrimaryButton } from '../components/ui';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { leadCategories, leadTypes, states, visitTimeSlots } from '../data';
+import { leadCategories, leadInterestOptions, leadTypes, visitTimeSlots } from '../data';
+
+const INTEREST_ICONS = {
+  Project: 'building',
+  Configuration: 'layers',
+  'Budget Range': 'hash',
+  'Preferred Floor': 'building-2',
+  Possession: 'calendar',
+  Financing: 'briefcase',
+};
 import { useApp } from '../store';
 
 const TYPE_TONE = {
@@ -29,7 +38,11 @@ export default function NewLeadScreen({ navigation }) {
     visitDate: '',
     visitTime: '',
     remarks: '',
+    interest: {},
   });
+
+  const setInterest = (key) => (value) =>
+    setForm((f) => ({ ...f, interest: { ...f.interest, [key]: value } }));
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -61,10 +74,26 @@ export default function NewLeadScreen({ navigation }) {
           <Text style={s.group}>Address</Text>
           <View style={{ gap: spacing.md }}>
             <TextField icon="map-pin" placeholder="Address" value={form.address} onChangeText={set('address')} />
-            <View style={{ flexDirection: 'row', gap: spacing.md }}>
-              <TextField icon="building" placeholder="City" value={form.city} onChangeText={set('city')} style={{ flex: 1 }} />
-              <SelectField icon="map" placeholder="State" value={form.state} options={states} onChange={set('state')} style={{ flex: 1 }} />
-            </View>
+            <StateCityFields
+              row
+              state={form.state}
+              city={form.city}
+              onChange={({ state, city }) => setForm((f) => ({ ...f, state, city }))}
+            />
+          </View>
+
+          <Text style={s.group}>Interest Details (optional)</Text>
+          <View style={{ gap: spacing.md }}>
+            {Object.entries(leadInterestOptions).map(([key, options]) => (
+              <SelectField
+                key={key}
+                icon={INTEREST_ICONS[key]}
+                placeholder={key}
+                value={form.interest[key]}
+                options={options}
+                onChange={setInterest(key)}
+              />
+            ))}
           </View>
 
           <Text style={s.group}>Lead Type</Text>
