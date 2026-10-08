@@ -10,15 +10,27 @@ import {
   SelectField,
   StatusPill,
   toneForStatus,
+  EmptyState,
 } from '../components/ui';
+import { displayMobile } from '../format';
+
+/** Visit status options staff can set, with the matching detail status. */
+const STATUS_OPTIONS = {
+  Confirmed: 'Upcoming',
+  Pending: 'Upcoming',
+  'In Progress': 'In Progress',
+  Completed: 'Completed',
+  Cancelled: 'Cancelled',
+};
 import { colors, radius, spacing, type, borderWidth } from '../theme';
 import { useApp } from '../store';
 import { parseDisplayDate } from '../components/DateField';
 
 /** Figma frame: `visit-detail-screen` (12:1020). */
 export default function VisitDetailScreen({ route }) {
-  const { visits, updateVisit } = useApp();
-  const visit = visits.find((v) => v.id === route.params?.id) || visits[0];
+  const { visits, updateVisit, can } = useApp();
+  const visit = visits.find((v) => v.id === route.params?.id) || { history: [] };
+  const canUpdate = can('visit.updateStatus');
   const [order, setOrder] = useState('Latest First');
   const [expanded, setExpanded] = useState(null);
 
@@ -33,6 +45,15 @@ export default function VisitDetailScreen({ route }) {
 
   const endVisit = () => updateVisit(visit.id, { visitStatus: 'Completed', status: 'Completed' });
   const active = visit.visitStatus === 'In Progress';
+
+  if (!visit.id) {
+    return (
+      <Screen showBack>
+        <PageTitle>Project Visits Details</PageTitle>
+        <EmptyState icon="calendar" title="Visit not available" body="This visit was removed or is not assigned to you." />
+      </Screen>
+    );
+  }
 
   return (
     <Screen showBack>
@@ -53,7 +74,7 @@ export default function VisitDetailScreen({ route }) {
             <View style={{ flex: 1, gap: spacing.md, paddingRight: spacing.md }}>
               <View style={s.inline}>
                 <Icon name="phone-off" size={16} color={colors.brandPrimary} />
-                <Text style={s.contact} numberOfLines={1}>{visit.phone}</Text>
+                <Text style={s.contact} numberOfLines={1}>{displayMobile(visit)}</Text>
               </View>
               <View style={s.inline}>
                 <Icon name="mail" size={16} color={colors.brandPrimary} />
@@ -121,14 +142,35 @@ export default function VisitDetailScreen({ route }) {
             </View>
             <Icon name="chevron-right" size={18} color={colors.muted} />
           </View>
-          <Divider style={{ marginVertical: spacing.lg }} />
-          <PrimaryButton
-            label={active ? 'End Current Visit' : 'Visit Closed'}
-            icon={active ? 'circle-check' : undefined}
-            disabled={!active}
-            onPress={endVisit}
-          />
+          {canUpdate ? (
+            <>
+              <Divider style={{ marginVertical: spacing.lg }} />
+              <SelectField
+                label="Update Visit Status"
+                value={active ? 'In Progress' : visit.status}
+                options={Object.keys(STATUS_OPTIONS)}
+                onChange={(status) => updateVisit(visit.id, { status, visitStatus: STATUS_OPTIONS[status] })}
+              />
+              {active ? (
+                <PrimaryButton
+                  label="End Current Visit"
+                  icon="circle-check"
+                  onPress={endVisit}
+                  style={{ marginTop: spacing.md }}
+                />
+              ) : null}
+            </>
+          ) : null}
         </Card>
+
+        {visit.assignedTo ? (
+          <Card style={{ flexDirection: 'row', gap: spacing.lg }}>
+            <KeyValue label="Assigned Staff" value={visit.assignedTo} icon="briefcase" style={{ flex: 1 }} compact />
+            {visit.associateId ? (
+              <KeyValue label="Brought by" value={visit.bookedBy} icon="users" style={{ flex: 1 }} compact />
+            ) : null}
+          </Card>
+        ) : null}
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={[s.sectionTitle, { flex: 1 }]}>Visit History</Text>

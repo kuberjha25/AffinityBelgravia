@@ -9,11 +9,20 @@ import { brand } from '../data';
 import { useApp } from '../store';
 import { imageFill } from '../components/fill';
 
-const STAT_ROUTE = { enquiries: 'Leads', visits: 'Visits', bookings: 'Registrations' };
+import { ROLES } from '../permissions';
 
 /** Figma frame: `my-profile` (12:2796). */
 export default function MyProfileScreen({ navigation }) {
-  const { profile, updateProfile } = useApp();
+  const { profile, updateProfile, role, setRole, isStaff, leads, visits, associates } = useApp();
+
+  // Counts from the same records the lists show.
+  const stats = profile.stats.map((stat) => {
+    if (stat.id === 'enquiries') return { ...stat, value: leads.length, route: 'Leads', params: { status: 'All' } };
+    if (stat.id === 'visits') return { ...stat, value: visits.length, route: 'Visits', params: { status: 'All' } };
+    return isStaff
+      ? { ...stat, value: associates.length, route: 'Registrations' }
+      : { ...stat, value: leads.filter((l) => l.status === 'Converted').length, route: 'Leads', params: { status: 'Converted' } };
+  });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(profile);
 
@@ -49,11 +58,11 @@ export default function MyProfileScreen({ navigation }) {
         </View>
 
         <View style={s.statRow}>
-          {profile.stats.map((stat) => (
+          {stats.map((stat) => (
             <Pressable
               key={stat.id}
               style={s.statCard}
-              onPress={() => navigation.navigate(STAT_ROUTE[stat.id] || 'Leads')}
+              onPress={() => navigation.navigate(stat.route, stat.params ? { ...stat.params, at: Date.now() } : undefined)}
             >
               <View style={s.statIcon}>
                 <Icon name={stat.icon} size={18} color={colors.brandPrimary} />
@@ -94,6 +103,29 @@ export default function MyProfileScreen({ navigation }) {
               </Pressable>
             </View>
           ))}
+        </Card>
+
+        {/* No backend yet: lets the client try both logins. Remove once roles come from the server. */}
+        <Card style={{ marginTop: spacing.lg }}>
+          <Text style={s.cardTitle}>Demo: Login as</Text>
+          <Text style={s.demoHint}>Switch to preview what each role can see and do.</Text>
+          <View style={s.roleRow}>
+            {Object.values(ROLES).map((r) => {
+              const active = role === r.id;
+              return (
+                <Pressable
+                  key={r.id}
+                  onPress={() => {
+                    setRole(r.id);
+                    navigation.navigate('Home');
+                  }}
+                  style={[s.roleOption, active && s.roleOptionActive]}
+                >
+                  <Text style={[s.roleLabel, active && { color: colors.onSurfaceInverse }]}>{r.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </Card>
 
         <Card style={{ marginTop: spacing.lg, padding: 0 }}>
@@ -234,4 +266,19 @@ const s = StyleSheet.create({
   },
   logoutLabel: { ...type.body, color: colors.brandPrimary },
   version: { ...type.caption, color: colors.muted, textAlign: 'center', marginTop: spacing.md },
+  demoHint: { ...type.caption, color: colors.muted, marginTop: spacing.xs },
+  roleRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  roleOption: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.default,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  roleOptionActive: { backgroundColor: colors.surfaceInverse, borderColor: colors.brandPrimary },
+  roleLabel: { ...type.caption, color: colors.onSurfaceTertiary, textAlign: 'center' },
 });

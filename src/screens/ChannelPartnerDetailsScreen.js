@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import KeyboardActionBar, { ACTION_BAR_HEIGHT } from '../components/KeyboardActionBar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,11 +11,44 @@ import { useApp } from '../store';
 
 /** Figma frame: `channel-partner-details` (12:292) — wizard step 3. */
 export default function ChannelPartnerDetailsScreen({ navigation }) {
-  const { onboarding, completeOnboarding, toggleDocument } = useApp();
+  const { onboarding, completeOnboarding, setDocumentFile } = useApp();
   const [company, setCompany] = useState(onboarding.company);
   const [reraNumber, setReraNumber] = useState(onboarding.reraNumber);
 
+  // #7: the document list and which ones are mandatory come from Admin config.
+  const pickDocument = async (doc) => {
+    if (doc.uploaded) {
+      Alert.alert(doc.title, doc.fileName, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => setDocumentFile(doc.id, '') },
+        { text: 'Replace', onPress: () => choose(doc) },
+      ]);
+      return;
+    }
+    choose(doc);
+  };
+
+  const choose = async (doc) => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+      if (!res.canceled && res.assets?.[0]) setDocumentFile(doc.id, res.assets[0].name);
+    } catch {
+      Alert.alert('Upload failed', 'Could not open the file picker. Please try again.');
+    }
+  };
+
   const submit = () => {
+    const missing = onboarding.documents.filter((d) => d.mandatory && !d.uploaded);
+    if (missing.length) {
+      Alert.alert(
+        'Required documents',
+        `Please upload: ${missing.map((d) => d.title).join(', ')}`
+      );
+      return;
+    }
     completeOnboarding({ company, reraNumber });
     navigation.navigate('ThankYou');
   };
@@ -64,10 +98,13 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.docTitle}>{doc.title}</Text>
-                    <Text style={s.docHint}>{doc.hint}</Text>
+                    <Text style={s.docHint} numberOfLines={1}>{doc.uploaded ? doc.fileName : doc.hint}</Text>
+                    <Text style={[s.docTag, doc.mandatory && { color: colors.error }]}>
+                      {doc.mandatory ? 'Required' : 'Optional'}
+                    </Text>
                   </View>
                   <Pressable
-                    onPress={() => toggleDocument(doc.id)}
+                    onPress={() => pickDocument(doc)}
                     style={[s.uploadBtn, doc.uploaded && s.uploadBtnDone]}
                   >
                     <Icon
@@ -122,6 +159,7 @@ const s = StyleSheet.create({
   },
   docTitle: { ...type.bodySmall, color: colors.onSurface },
   docHint: { ...type.caption, color: colors.muted, marginTop: 2 },
+  docTag: { ...type.caption, fontSize: 11, color: colors.muted, marginTop: 2 },
 
   uploadBtn: {
     height: 32,

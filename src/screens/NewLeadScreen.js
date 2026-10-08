@@ -6,6 +6,8 @@ import DateField from '../components/DateField';
 import { TextField, SelectField, StateCityFields, PrimaryButton } from '../components/ui';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
 import { leadCategories, leadInterestOptions, leadTypes, visitTimeSlots } from '../data';
+import LeadSourceFields, { validateLeadSource } from '../components/LeadSourceFields';
+import { useApp } from '../store';
 
 const INTEREST_ICONS = {
   Project: 'building',
@@ -15,7 +17,6 @@ const INTEREST_ICONS = {
   Possession: 'calendar',
   Financing: 'briefcase',
 };
-import { useApp } from '../store';
 
 const TYPE_TONE = {
   Hot: { fg: colors.error, bg: 'rgba(180,83,74,0.06)' },
@@ -23,23 +24,32 @@ const TYPE_TONE = {
   Cold: { fg: colors.muted, bg: colors.surfaceSecondary },
 };
 
-/** Figma frame: `lead-detail-screen` @ 9651 (12:2293) — the New Lead form. */
-export default function NewLeadScreen({ navigation }) {
-  const { addLead } = useApp();
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    category: '',
-    address: '',
-    city: '',
-    state: '',
-    type: 'Warm',
-    visitDate: '',
-    visitTime: '',
-    remarks: '',
-    interest: {},
-  });
+/**
+ * Figma frame: `lead-detail-screen` @ 9651 (12:2293) — the New Lead form.
+ * Staff only (#3). With `route.params.id` it edits that lead instead.
+ */
+export default function NewLeadScreen({ navigation, route }) {
+  const { addLead, editLead, allLeads } = useApp();
+  const editing = route?.params?.id ? allLeads.find((l) => l.id === route.params.id) : null;
+  const [form, setForm] = useState(() => ({
+    name: editing?.name || '',
+    email: editing?.email || '',
+    phone: editing?.phone || '',
+    source: editing?.source || '',
+    associateId: editing?.associateId || null,
+    mobileLast4: editing?.mobileLast4 || '',
+    aadhaarLast4: editing?.aadhaarLast4 || '',
+    category: editing?.category || '',
+    address: editing?.address || '',
+    city: editing?.city || '',
+    state: editing?.state || '',
+    type: editing?.type || 'Warm',
+    visitDate: editing?.visitDate || '',
+    visitTime: editing?.visitTime || '',
+    remarks: editing?.remarks || '',
+    interest: { ...(editing?.interest || {}) },
+  }));
+  const patch = (p) => setForm((f) => ({ ...f, ...p }));
 
   const setInterest = (key) => (value) =>
     setForm((f) => ({ ...f, interest: { ...f.interest, [key]: value } }));
@@ -51,24 +61,38 @@ export default function NewLeadScreen({ navigation }) {
       Alert.alert('Name required', 'Please enter the lead name.');
       return;
     }
+    const error = validateLeadSource(form);
+    if (error) {
+      Alert.alert('Check details', error);
+      return;
+    }
+    if (editing) {
+      editLead(editing.id, form);
+      Alert.alert('Lead updated', `${form.name}'s details have been saved.`, [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+      return;
+    }
     const record = addLead(form);
     Alert.alert('Lead submitted', `${record.name} has been added to your leads.`, [
       { text: 'OK', onPress: () => navigation.goBack() },
     ]);
   };
 
+  const submitLabel = editing ? 'Save Changes' : 'Submit Lead';
+
   return (
-    <Screen showBack keyboardAction={<PrimaryButton label="Submit Lead" onPress={submit} />}>
+    <Screen showBack keyboardAction={<PrimaryButton label={submitLabel} onPress={submit} />}>
       <>
-        <PageTitle>New Lead</PageTitle>
+        <PageTitle>{editing ? 'Edit Lead' : 'New Lead'}</PageTitle>
 
         <View style={{ paddingHorizontal: spacing.xl }}>
           <Text style={s.group}>Details</Text>
           <View style={{ gap: spacing.md }}>
             <TextField icon="user" placeholder="Full Name" value={form.name} onChangeText={set('name')} />
             <TextField icon="mail" placeholder="Email Address" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" />
-            <TextField icon="phone" placeholder="Mobile Number" value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" />
-            <SelectField icon="grid" placeholder="Category" value={form.category} options={leadCategories} onChange={set('category')} />
+            <LeadSourceFields form={form} onChange={patch} />
+            <SelectField icon="grid" placeholder="Customer Category" value={form.category} options={leadCategories} onChange={set('category')} />
           </View>
 
           <Text style={s.group}>Address</Text>
@@ -131,7 +155,7 @@ export default function NewLeadScreen({ navigation }) {
             showCounter
           />
 
-          <PrimaryButton label="Submit Lead" onPress={submit} style={{ marginTop: spacing.lg }} />
+          <PrimaryButton label={submitLabel} onPress={submit} style={{ marginTop: spacing.lg }} />
         </View>
       </>
     </Screen>

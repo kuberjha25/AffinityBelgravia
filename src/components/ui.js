@@ -43,7 +43,7 @@ export function PrimaryButton({ label, icon, iconRight, onPress, disabled, style
   );
 }
 
-export function SecondaryButton({ label, icon, onPress, disabled, style }) {
+export function SecondaryButton({ label, icon, onPress, disabled, style, labelStyle }) {
   return (
     <Pressable
       onPress={disabled ? undefined : onPress}
@@ -55,8 +55,14 @@ export function SecondaryButton({ label, icon, onPress, disabled, style }) {
         style,
       ]}
     >
-      {icon ? <Icon name={icon} size={16} color={disabled ? colors.muted : colors.brandPrimary} /> : null}
-      <Text style={[s.btnSecondaryLabel, disabled && { color: colors.muted }]}>{label}</Text>
+      {icon ? (
+        <Icon
+          name={icon}
+          size={16}
+          color={disabled ? colors.muted : StyleSheet.flatten(labelStyle)?.color || colors.brandPrimary}
+        />
+      ) : null}
+      <Text style={[s.btnSecondaryLabel, labelStyle, disabled && { color: colors.muted }]}>{label}</Text>
     </Pressable>
   );
 }

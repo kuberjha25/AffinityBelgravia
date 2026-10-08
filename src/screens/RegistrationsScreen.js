@@ -14,10 +14,13 @@ import {
   FilterSheet,
 } from '../components/ui';
 import { parseDisplayDate } from '../components/DateField';
+import { matchesPhone } from '../format';
 import { colors, spacing, type, radius } from '../theme';
 import { registrationFilters } from '../data';
 
 const SORTS = ['Newest first', 'Oldest first', 'Name A-Z'];
+const DATE_RANGES = { 'Any time': 0, 'Last 7 days': 7, 'Last 30 days': 30, 'Last 90 days': 90 };
+const DAY = 24 * 60 * 60 * 1000;
 import { useApp } from '../store';
 
 /** Figma frame: `complete-profile` @ 3977 (12:549) — the registrations list. */
@@ -27,6 +30,7 @@ export default function RegistrationsScreen({ navigation }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
   const [sort, setSort] = useState(SORTS[0]);
+  const [dateRange, setDateRange] = useState('Any time');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const rows = useMemo(() => {
@@ -34,15 +38,17 @@ export default function RegistrationsScreen({ navigation }) {
     const list = registrations.filter((r) => {
       if (r.status !== tab) return false;
       if (filter !== 'All' && r.type !== filter) return false;
+      if (DATE_RANGES[dateRange] && parseDisplayDate(r.date) < Date.now() - DATE_RANGES[dateRange] * DAY) return false;
       if (!q) return true;
-      return r.name.toLowerCase().includes(q) || r.phone.replace(/s/g, '').includes(q.replace(/s/g, ''));
+      return r.name.toLowerCase().includes(q) || matchesPhone(r, q);
     });
     if (sort === 'Name A-Z') return [...list].sort((a, b) => a.name.localeCompare(b.name));
     const dir = sort === 'Oldest first' ? 1 : -1;
     return [...list].sort((a, b) => dir * (parseDisplayDate(a.date) - parseDisplayDate(b.date)));
-  }, [registrations, tab, filter, sort, query]);
+  }, [registrations, tab, filter, sort, dateRange, query]);
 
-  const activeFilters = (filter !== 'All' ? 1 : 0) + (sort !== SORTS[0] ? 1 : 0);
+  const activeFilters =
+    (filter !== 'All' ? 1 : 0) + (sort !== SORTS[0] ? 1 : 0) + (dateRange !== 'Any time' ? 1 : 0);
 
   return (
     <Screen showBack>
@@ -120,15 +126,18 @@ export default function RegistrationsScreen({ navigation }) {
         onClose={() => setFiltersOpen(false)}
         sections={[
           { id: 'type', title: 'Registration Type', options: registrationFilters, value: filter },
+          { id: 'date', title: 'Registered', options: Object.keys(DATE_RANGES), value: dateRange },
           { id: 'sort', title: 'Sort By', options: SORTS, value: sort },
         ]}
         onApply={(v) => {
           setFilter(v.type);
           setSort(v.sort);
+          setDateRange(v.date);
         }}
         onReset={() => {
           setFilter('All');
           setSort(SORTS[0]);
+          setDateRange('Any time');
         }}
       />
     </Screen>

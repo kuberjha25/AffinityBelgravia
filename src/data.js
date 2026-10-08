@@ -7,6 +7,13 @@
  * "Affinity New" (page 02 Screens).
  */
 
+import {
+  customerCategories,
+  preferredConfigurations,
+  timeSlots,
+  registrationDocuments,
+} from './config';
+
 export const images = {
   logo: require('../assets/images/logo-monogram.png'),
   logoHi: require('../assets/images/logo-monogram-hi.png'),
@@ -113,15 +120,10 @@ export const employees = [
   'Simran Kaur — CRM Executive',
 ];
 
-export const uploadDocuments = [
-  { id: 'incorporation', title: 'Certificate of Incorporation', hint: 'incorporation_cert.pdf', uploaded: true },
-  { id: 'partnership', title: 'Partnership Deed', hint: 'Only for Partnership Firms', uploaded: false },
-  { id: 'llp', title: 'LLP Registration Certificate', hint: 'Only for LLP Entities', uploaded: false },
-  { id: 'gst', title: 'GST Registration Certificate', hint: 'GSTIN copy (Required)', uploaded: false },
-  { id: 'pan', title: 'PAN Card', hint: 'Company / Individual PAN (Required)', uploaded: false },
-  { id: 'msme', title: 'MSME/Udyam Registration', hint: 'Optional, if registered', uploaded: false },
-  { id: 'rera', title: 'RERA Certificate', hint: 'RERA Certificate copy', uploaded: false },
-];
+/** Registration documents as configured by Admin (#7); nothing uploaded yet. */
+export const uploadDocuments = registrationDocuments
+  .filter((d) => d.visible)
+  .map((d) => ({ ...d, uploaded: false, fileName: '' }));
 
 /* ------------------------------------------------------------------ user */
 
@@ -141,6 +143,26 @@ export const currentUser = {
     { id: 'enquiries', value: 3, label: 'Enquiries', icon: 'home' },
     { id: 'visits', value: 2, label: 'Site Visits', icon: 'calendar' },
     { id: 'bookings', value: 1, label: 'Bookings', icon: 'briefcase' },
+  ],
+};
+
+/** Demo Sales / Front Office staff login, used by the Profile "demo switch". */
+export const staffUser = {
+  id: 's-1',
+  firstName: 'Aman',
+  name: 'Aman Verma',
+  role: 'Sales Manager',
+  partnerId: 'EMP-1042',
+  phone: '+91 98140 22311',
+  email: 'aman.verma@affinitybelgravia.com',
+  address: 'Sales Office, Zirakpur',
+  dob: '04 Mar 1988',
+  avatar: images.person2,
+  cover: images.coverProfile,
+  stats: [
+    { id: 'enquiries', value: 5, label: 'Leads', icon: 'home' },
+    { id: 'visits', value: 5, label: 'Site Visits', icon: 'calendar' },
+    { id: 'bookings', value: 5, label: 'Partners', icon: 'briefcase' },
   ],
 };
 
@@ -183,6 +205,7 @@ export const quickAccessPartner = [
   { id: 'qa5', label: 'Inventory', icon: 'shopping-bag', route: 'Inventory' },
   { id: 'qa6', label: 'Documents', icon: 'file', route: 'Documents' },
   { id: 'qa7', label: 'MIS Report', icon: 'trending-up', route: 'MISReport' },
+  { id: 'qa8', label: 'Greetings', icon: 'gift', route: 'Greetings' },
 ];
 
 /** Quick access grid for the end-user home (screen `User-home-screen`). */
@@ -342,10 +365,13 @@ export const siteVisits = [
     project: 'AFFINITY TOWER B',
     bookedBy: 'Ayesha Khan',
     bookedByType: 'Influencer',
+    associateId: 'r1',
+    assignedTo: 'Aman Verma',
+    mobileLast4: '3210',
     date: '2 Jun 2024',
     time: '10:30 AM',
     status: 'Confirmed',
-    phone: '+91 98765 43210',
+    phone: '',
     email: 'rahul.kapoor@email.com',
     leadType: 'HOT',
     visitStatus: 'In Progress',
@@ -359,12 +385,15 @@ export const siteVisits = [
     id: 'v2',
     name: 'Priya Nair',
     project: 'AFFINITY VILLA',
-    bookedBy: 'Rohit Mehra',
-    bookedByType: 'Broker',
+    bookedBy: 'Yash Arora',
+    bookedByType: 'Partner',
+    associateId: 'u-1',
+    assignedTo: 'Neha Sharma',
+    mobileLast4: '6789',
     date: '1 Jun 2024',
     time: '2:00 PM',
     status: 'Pending',
-    phone: '+91 91234 56789',
+    phone: '',
     email: 'priya.nair@email.com',
     leadType: 'WARM',
     visitStatus: 'Upcoming',
@@ -379,10 +408,13 @@ export const siteVisits = [
     project: 'AFFINITY TOWER A',
     bookedBy: 'Pooja Sharma',
     bookedByType: 'Influencer',
+    associateId: 'r3',
+    assignedTo: 'Aman Verma',
+    mobileLast4: '4321',
     date: '30 May 2024',
     time: '11:00 AM',
     status: 'Completed',
-    phone: '+91 99876 54321',
+    phone: '',
     email: 'vikram.singh@email.com',
     leadType: 'HOT',
     visitStatus: 'Completed',
@@ -398,10 +430,13 @@ export const siteVisits = [
     project: 'AFFINITY PENTHOUSE',
     bookedBy: 'Arjun Verma',
     bookedByType: 'Broker',
+    associateId: 'r4',
+    assignedTo: 'Simran Kaur',
+    mobileLast4: '5678',
     date: '29 May 2024',
     time: '3:30 PM',
     status: 'Cancelled',
-    phone: '+91 98123 45678',
+    phone: '',
     email: 'meera.joshi@email.com',
     leadType: 'COLD',
     visitStatus: 'Cancelled',
@@ -414,12 +449,15 @@ export const siteVisits = [
     id: 'v5',
     name: 'Aditya Rao',
     project: 'AFFINITY TOWER B',
-    bookedBy: 'Neha Iyer',
-    bookedByType: 'Influencer',
+    bookedBy: 'Yash Arora',
+    bookedByType: 'Partner',
+    associateId: 'u-1',
+    assignedTo: 'Rohit Khanna',
+    mobileLast4: '0987',
     date: '28 May 2024',
     time: '9:00 AM',
     status: 'Confirmed',
-    phone: '+91 95432 10987',
+    phone: '',
     email: 'aditya.rao@email.com',
     leadType: 'WARM',
     visitStatus: 'Upcoming',
@@ -430,13 +468,7 @@ export const siteVisits = [
   },
 ];
 
-export const visitTimeSlots = [
-  '9:00 AM - 11:00 AM',
-  '11:00 AM - 1:00 PM',
-  '1:00 PM - 3:00 PM',
-  '3:00 PM - 5:00 PM',
-  '5:00 PM - 7:00 PM',
-];
+export const visitTimeSlots = timeSlots;
 
 /* ------------------------------------------------------------- leads */
 
@@ -455,18 +487,27 @@ export const leadTypes = [
 
 export const leadStatuses = ['In Progress', 'Converted', 'Not Interested', 'Not Matured'];
 
-export const leadCategories = ['Residential', 'Commercial', 'Investment', 'Resale'];
+/** Sales / Front Office staff leads and visits can be assigned to. */
+export const staffMembers = ['Aman Verma', 'Neha Sharma', 'Rohit Khanna', 'Simran Kaur'];
+
+export const leadCategories = customerCategories;
 
 export const leads = [
   {
     id: 'l1',
     name: 'Rajesh Kumar',
-    phone: '+91 98765 43210',
+    phone: '',
+    associateId: 'u-1',
+    associateName: 'Yash Arora',
+    assignedTo: 'Aman Verma',
+    category: 'Residential',
+    mobileLast4: '3210',
+    aadhaarLast4: '4821',
     email: 'rajesh.kumar@email.com',
     project: 'Affinity Belgravia - 3 BHK',
     type: 'Hot',
     status: 'In Progress',
-    source: 'Walk-in',
+    source: 'CP / Freelancer / Influencer',
     activeOn: '28 Aug 2026',
     followUpDate: '15 Sep 2026',
     interest: {
@@ -489,12 +530,18 @@ export const leads = [
   {
     id: 'l2',
     name: 'Priya Sharma',
-    phone: '+91 87654 32109',
+    phone: '',
+    associateId: 'u-1',
+    associateName: 'Yash Arora',
+    assignedTo: 'Neha Sharma',
+    category: 'Investment',
+    mobileLast4: '2109',
+    aadhaarLast4: '7310',
     email: 'priya.sharma@email.com',
     project: 'Affinity Belgravia - 3 BHK',
     type: 'Warm',
     status: 'In Progress',
-    source: 'Referral',
+    source: 'CP / Freelancer / Influencer',
     activeOn: '27 Aug 2026',
     followUpDate: '12 Sep 2026',
     interest: {
@@ -514,12 +561,18 @@ export const leads = [
   {
     id: 'l3',
     name: 'Amit Patel',
-    phone: '+91 76543 21098',
+    phone: '',
+    associateId: 'r1',
+    associateName: 'Ayesha Khan',
+    assignedTo: 'Rohit Khanna',
+    category: 'Residential',
+    mobileLast4: '1098',
+    aadhaarLast4: '5562',
     email: 'amit.patel@email.com',
     project: 'Affinity Belgravia - 3 BHK',
     type: 'Cold',
     status: 'Converted',
-    source: 'Digital',
+    source: 'CP / Freelancer / Influencer',
     activeOn: '25 Aug 2026',
     followUpDate: '—',
     interest: {
@@ -541,6 +594,10 @@ export const leads = [
     id: 'l4',
     name: 'Sneha Desai',
     phone: '+91 65432 10987',
+    associateId: null,
+    associateName: '',
+    assignedTo: 'Simran Kaur',
+    category: 'Resale',
     email: 'sneha.desai@email.com',
     project: 'Affinity Belgravia - 3 BHK',
     type: 'Warm',
@@ -565,12 +622,18 @@ export const leads = [
   {
     id: 'l5',
     name: 'Vikram Singh',
-    phone: '+91 54321 09876',
+    phone: '',
+    associateId: 'u-1',
+    associateName: 'Yash Arora',
+    assignedTo: 'Aman Verma',
+    category: 'Commercial',
+    mobileLast4: '9876',
+    aadhaarLast4: '2290',
     email: 'vikram.singh@email.com',
     project: 'Affinity Belgravia - 3 BHK',
     type: 'Hot',
     status: 'In Progress',
-    source: 'Referral',
+    source: 'CP / Freelancer / Influencer',
     activeOn: '20 Aug 2026',
     followUpDate: '10 Sep 2026',
     interest: {
@@ -643,7 +706,7 @@ export const projects = [
 /** Options for the Interest Details captured on the New Lead form. */
 export const leadInterestOptions = {
   Project: ['Affinity Belgravia'],
-  Configuration: ['2 BHK', '3 BHK', '4 BHK'],
+  Configuration: preferredConfigurations,
   'Budget Range': ['₹1.5 - 2.0 Cr', '₹2.0 - 2.5 Cr', '₹2.5 - 3.0 Cr', '₹3.0 - 4.0 Cr', 'Above ₹4.0 Cr'],
   'Preferred Floor': ['Ground - 5th', '5-10th', '10-15th', '15-20th', '20th & above', 'Any'],
   Possession: ['Immediate', 'Within 6 months', 'Within 1 year', 'Dec 2026'],
@@ -1001,6 +1064,8 @@ export default {
   citiesByState,
   employees,
   uploadDocuments,
+  staffUser,
+  staffMembers,
   currentUser,
   homeBanners,
   homeGlance,

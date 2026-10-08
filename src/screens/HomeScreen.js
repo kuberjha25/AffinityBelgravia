@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Screen from '../components/Screen';
 import Icon from '../components/Icon';
 import { colors, radius, spacing, type, borderWidth, shadow } from '../theme';
-import { homeBanners, homeGlance, quickAccessPartner, quickAccessUser, currentUser } from '../data';
+import { homeBanners, quickAccessPartner, quickAccessUser, currentUser, project } from '../data';
 import { useApp } from '../store';
 import { imageFill } from '../components/fill';
 
@@ -25,9 +25,28 @@ const BANNER_W = width - H_PADDING * 2;
  * The two differ only in the Quick Access tiles, so one screen serves both.
  */
 export default function HomeScreen({ navigation, route }) {
-  const variant = route?.params?.variant || 'partner';
+  const { profile, isStaff, leads, visits, registrations } = useApp();
+  // Staff get the full `home-screen` tiles; CP / Freelancer / Influencer the `User-home-screen` set.
+  const variant = route?.params?.variant || (isStaff ? 'partner' : 'user');
   const quickAccess = variant === 'user' ? quickAccessUser : quickAccessPartner;
-  const { profile } = useApp();
+
+  // #15: counts come from the same records the lists show, and each card opens
+  // that list already filtered (e.g. Leads In Progress → Leads › In Progress).
+  const upcoming = visits.filter((v) => ['Confirmed', 'Pending'].includes(v.status)).length;
+  const glance = [
+    isStaff
+      ? { id: 'g1', value: registrations.length, lines: ['Registrations'], route: 'Registrations' }
+      : { id: 'g1', value: leads.length, lines: ['My', 'Leads'], route: 'Leads', params: { status: 'All' } },
+    {
+      id: 'g2',
+      value: leads.filter((l) => l.status === 'In Progress').length,
+      lines: ['Leads In', 'Progress'],
+      route: 'Leads',
+      params: { status: 'In Progress' },
+    },
+    { id: 'g3', value: upcoming, lines: ['Visits', 'Scheduled'], route: 'Visits', params: { status: 'Upcoming' } },
+    { id: 'g4', value: project.available, lines: ['Units', 'Available'], route: 'Inventory' },
+  ];
   const [page, setPage] = useState(0);
   const listRef = useRef(null);
 
@@ -36,9 +55,9 @@ export default function HomeScreen({ navigation, route }) {
     if (i !== page) setPage(i);
   };
 
-  const go = (target) => {
+  const go = (target, params) => {
     if (!target) return;
-    navigation.navigate(target);
+    navigation.navigate(target, params ? { ...params, at: Date.now() } : undefined);
   };
 
   return (
@@ -80,9 +99,9 @@ export default function HomeScreen({ navigation, route }) {
 
       <Text style={s.groupLabel}>At a Glance</Text>
       <View style={s.glanceRow}>
-        {homeGlance.map((g) => (
-          <Pressable key={g.id} style={s.glanceCard} onPress={() => go(g.route)}>
-            <Text style={s.glanceValue} numberOfLines={1} adjustsFontSizeToFit>{g.value}</Text>
+        {glance.map((g) => (
+          <Pressable key={g.id} style={s.glanceCard} onPress={() => go(g.route, g.params)}>
+            <Text style={s.glanceValue} numberOfLines={1} adjustsFontSizeToFit>{String(g.value)}</Text>
             <FitLines lines={g.lines} style={s.glanceLabel} />
           </Pressable>
         ))}

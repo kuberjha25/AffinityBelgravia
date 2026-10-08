@@ -52,6 +52,7 @@ const linking = {
       Notifications: 'notifications',
       Terms: 'terms',
       About: 'about',
+      Greetings: 'greetings',
     },
   },
 };

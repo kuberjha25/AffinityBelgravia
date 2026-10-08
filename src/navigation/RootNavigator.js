@@ -27,6 +27,7 @@ import NewsDetailScreen from '../screens/NewsDetailScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import TermsScreen from '../screens/TermsScreen';
 import AboutScreen from '../screens/AboutScreen';
+import GreetingsScreen from '../screens/GreetingsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -87,6 +88,7 @@ export default function RootNavigator() {
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Terms" component={TermsScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
+      <Stack.Screen name="Greetings" component={GreetingsScreen} />
     </Stack.Navigator>
   );
 }

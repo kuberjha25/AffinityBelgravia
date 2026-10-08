@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
 import DateField from '../components/DateField';
@@ -13,7 +13,9 @@ import {
   StatusPill,
   TextField,
   toneForStatus,
+  EmptyState,
 } from '../components/ui';
+import { displayAadhaar, displayMobile } from '../format';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
 import { leadStatuses, leadTypes } from '../data';
 import { useApp } from '../store';
@@ -21,18 +23,50 @@ import { useApp } from '../store';
 /**
  * Figma frames: `lead-detail-screen` (12:2135) and the
  * `lead-update-popup` overlay (12:2415).
+ * CP / Freelancer / Influencer: view only (#2). Staff: edit, delete, update
+ * status, add notes and schedule a visit (#3).
  */
 export default function LeadDetailScreen({ navigation, route }) {
-  const { leads, updateLead } = useApp();
-  const lead = leads.find((l) => l.id === route.params?.id) || leads[0];
+  const { leads, updateLead, deleteLead, can } = useApp();
+  const lead = leads.find((l) => l.id === route.params?.id);
+  const canEdit = can('lead.edit');
 
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState({
-    type: lead.type,
-    status: lead.status,
-    followUpDate: lead.followUpDate,
+    type: lead?.type,
+    status: lead?.status,
+    followUpDate: lead?.followUpDate,
     note: '',
   });
+
+  if (!lead) {
+    return (
+      <Screen showBack>
+        <PageTitle>Lead Detail</PageTitle>
+        <EmptyState icon="users" title="Lead not available" body="This lead was removed or is not assigned to you." />
+      </Screen>
+    );
+  }
+
+  const viaAssociate = Boolean(lead.associateId);
+
+  const openUpdate = () => {
+    setDraft({ type: lead.type, status: lead.status, followUpDate: lead.followUpDate, note: '' });
+    setOpen(true);
+  };
+
+  const confirmDelete = () =>
+    Alert.alert('Delete Lead', `Delete ${lead.name}? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          navigation.goBack();
+          deleteLead(lead.id);
+        },
+      },
+    ]);
 
   const save = () => {
     updateLead(lead.id, {
@@ -60,8 +94,17 @@ export default function LeadDetailScreen({ navigation, route }) {
           <Divider style={{ marginVertical: spacing.lg }} />
 
           <View style={{ gap: spacing.lg }}>
-            <ContactRow icon="phone" label="Phone" value={lead.phone} />
-            <ContactRow icon="mail" label="Email" value={lead.email} />
+            <ContactRow
+              icon="phone"
+              label={viaAssociate ? 'Mobile (last 4 digits)' : 'Phone'}
+              value={displayMobile(lead)}
+            />
+            {viaAssociate ? (
+              <ContactRow icon="file-text" label="Aadhaar (last 4 digits)" value={displayAadhaar(lead.aadhaarLast4)} />
+            ) : null}
+            {lead.email ? <ContactRow icon="mail" label="Email" value={lead.email} /> : null}
+            {viaAssociate ? <ContactRow icon="users" label="Brought by" value={lead.associateName} /> : null}
+            {lead.assignedTo ? <ContactRow icon="briefcase" label="Assigned Staff" value={lead.assignedTo} /> : null}
           </View>
         </Card>
 
@@ -111,23 +154,50 @@ export default function LeadDetailScreen({ navigation, route }) {
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={[s.cardTitle, { flex: 1 }]}>Notes</Text>
-            <Pressable onPress={() => setOpen(true)} hitSlop={8}>
-              <Text style={s.addNote}>Add Note</Text>
-            </Pressable>
+            {canEdit ? (
+              <Pressable onPress={openUpdate} hitSlop={8}>
+                <Text style={s.addNote}>Add Note</Text>
+              </Pressable>
+            ) : null}
           </View>
           <View style={s.noteBox}>
             <Text style={s.noteText}>{lead.note}</Text>
           </View>
         </Card>
 
-        <View style={{ flexDirection: 'row', gap: spacing.md }}>
-          <PrimaryButton
-            label="Schedule Visit"
-            onPress={() => navigation.navigate('ScheduleVisit')}
-            style={{ flex: 1 }}
-          />
-          <SecondaryButton label="Update Status" onPress={() => setOpen(true)} style={{ flex: 1 }} />
-        </View>
+        {canEdit ? (
+          <>
+            <View style={{ flexDirection: 'row', gap: spacing.md }}>
+              <PrimaryButton
+                label="Schedule Visit"
+                onPress={() => navigation.navigate('ScheduleVisit', { leadId: lead.id })}
+                style={{ flex: 1 }}
+              />
+              <SecondaryButton label="Update Status" onPress={openUpdate} style={{ flex: 1 }} />
+            </View>
+            <View style={{ flexDirection: 'row', gap: spacing.md }}>
+              <SecondaryButton
+                label="Edit Lead"
+                icon="edit"
+                onPress={() => navigation.navigate('NewLead', { id: lead.id })}
+                style={{ flex: 1 }}
+              />
+              {can('lead.delete') ? (
+                <SecondaryButton
+                  label="Delete"
+                  icon="x"
+                  onPress={confirmDelete}
+                  style={{ flex: 1, borderColor: colors.error }}
+                  labelStyle={{ color: colors.error }}
+                />
+              ) : null}
+            </View>
+          </>
+        ) : (
+          <Text style={s.viewOnly}>
+            View only. Contact the Affinity Belgravia sales team to update this lead.
+          </Text>
+        )}
       </View>
 
       <CenterDialog visible={open} onClose={() => setOpen(false)} title="Update Lead">
@@ -224,6 +294,7 @@ const s = StyleSheet.create({
   histBy: { ...type.caption, color: colors.muted },
 
   addNote: { ...type.bodySmall, color: colors.brandPrimary },
+  viewOnly: { ...type.caption, color: colors.muted, textAlign: 'center' },
   noteBox: {
     marginTop: spacing.md,
     backgroundColor: colors.surfaceTertiary,

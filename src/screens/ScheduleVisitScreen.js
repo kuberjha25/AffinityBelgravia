@@ -4,18 +4,10 @@ import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
 import DateField from '../components/DateField';
 import { TextField, SelectField, StateCityFields, PrimaryButton } from '../components/ui';
+import LeadSourceFields, { validateLeadSource } from '../components/LeadSourceFields';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { leadTypes, project, visitTimeSlots } from '../data';
-
-/**
- * Who the visit is for. "Myself" = the broker visiting the site personally
- * (their own details are pre-filled); "Client" = the broker booking for a
- * customer, whose details are entered manually.
- */
-const VISITOR_OPTIONS = [
-  { id: 'broker', label: 'Myself', icon: 'user', hint: 'You are visiting the site yourself. Your details are filled in below.' },
-  { id: 'client', label: 'Client', icon: 'users', hint: "You are booking a visit for your client. Enter the client's details below." },
-];
+import { leadTypes, project } from '../data';
+import { timeSlots } from '../config';
 import { useApp } from '../store';
 
 const TYPE_TONE = {
@@ -24,44 +16,49 @@ const TYPE_TONE = {
   Cold: { fg: colors.success, bg: colors.surfaceSecondary },
 };
 
-/** Figma frame: `schedule-visit-screen` (12:1176). */
-export default function ScheduleVisitScreen({ navigation }) {
-  const { addVisit, profile } = useApp();
-  const [role, setRole] = useState('broker');
-  const selfDetails = { name: profile.name, phone: profile.phone, email: profile.email };
-  const [form, setForm] = useState({
-    ...selfDetails,
-    address: '',
-    city: '',
-    state: '',
+const PROJECTS = [project.name, 'AFFINITY GREEN', 'AFFINITY VILLA', 'AFFINITY PENTHOUSE'];
+
+/**
+ * Figma frame: `schedule-visit-screen` (12:1176).
+ * Staff only (#3): a visit is booked by Sales / Front Office staff, on behalf
+ * of the CP / Freelancer / Influencer when they bring the customer in.
+ * Opened from a lead (`route.params.leadId`) the customer's details are pre-filled.
+ */
+export default function ScheduleVisitScreen({ navigation, route }) {
+  const { addVisit, allLeads } = useApp();
+  const lead = route?.params?.leadId ? allLeads.find((l) => l.id === route.params.leadId) : null;
+  const [form, setForm] = useState(() => ({
+    name: lead?.name || '',
+    email: lead?.email || '',
+    phone: lead?.phone || '',
+    source: lead?.source || '',
+    associateId: lead?.associateId || null,
+    mobileLast4: lead?.mobileLast4 || '',
+    aadhaarLast4: lead?.aadhaarLast4 || '',
+    address: lead?.address || '',
+    city: lead?.city || '',
+    state: lead?.state || '',
     project: '',
-    leadType: 'Hot',
+    leadType: lead?.type || 'Hot',
     date: '',
     time: '',
     notes: '',
-  });
+  }));
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
-
-  const chooseVisitor = (id) => {
-    setRole(id);
-    setForm((f) => {
-      if (id === 'broker') return { ...f, ...selfDetails };
-      // Switching to Client: clear the broker's own details so they aren't submitted by mistake.
-      const cleared = {};
-      Object.keys(selfDetails).forEach((k) => {
-        cleared[k] = f[k] === selfDetails[k] ? '' : f[k];
-      });
-      return { ...f, ...cleared };
-    });
-  };
+  const patch = (p) => setForm((f) => ({ ...f, ...p }));
 
   const create = () => {
     if (!form.name.trim()) {
       Alert.alert('Name required', 'Please enter the visitor name.');
       return;
     }
-    addVisit({ ...form, role });
+    const error = validateLeadSource(form);
+    if (error) {
+      Alert.alert('Check details', error);
+      return;
+    }
+    addVisit(form);
     Alert.alert('Visit created', `${form.name}'s visit has been scheduled.`, [
       { text: 'OK', onPress: () => navigation.goBack() },
     ]);
@@ -76,29 +73,8 @@ export default function ScheduleVisitScreen({ navigation }) {
         <PageTitle>Schedule Project Visit</PageTitle>
 
         <View style={{ paddingHorizontal: spacing.xl, gap: spacing.md }}>
-          <Text style={s.group}>Who is visiting?</Text>
-          <View style={{ flexDirection: 'row', gap: spacing.md }}>
-            {VISITOR_OPTIONS.map((opt) => {
-              const active = role === opt.id;
-              return (
-                <Pressable
-                  key={opt.id}
-                  onPress={() => chooseVisitor(opt.id)}
-                  style={[s.roleCard, active && s.roleCardActive]}
-                >
-                  <Icon name={opt.icon} size={18} color={active ? colors.onSurface : colors.muted} />
-                  <Text style={[s.roleLabel, active && { color: colors.onSurface }]} numberOfLines={1} adjustsFontSizeToFit>
-                    {opt.label}
-                  </Text>
-                  <View style={[s.radio, active && { backgroundColor: colors.brandPrimary }]} />
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={s.hint}>{VISITOR_OPTIONS.find((o) => o.id === role).hint}</Text>
-
-          <TextField icon="user" placeholder={role === 'client' ? "Enter client's complete name" : 'Enter complete name'} value={form.name} onChangeText={set('name')} />
-          <TextField icon="phone" placeholder="Enter mobile number" value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" />
+          <TextField icon="user" placeholder="Enter customer's complete name" value={form.name} onChangeText={set('name')} />
+          <LeadSourceFields form={form} onChange={patch} />
           <TextField icon="mail" placeholder="Enter email address" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" />
           <TextField icon="map-pin" placeholder="Enter complete address" value={form.address} onChangeText={set('address')} />
 
@@ -113,7 +89,7 @@ export default function ScheduleVisitScreen({ navigation }) {
             icon="building"
             placeholder="Select project"
             value={form.project}
-            options={[project.name, 'AFFINITY GREEN', 'AFFINITY VILLA', 'AFFINITY PENTHOUSE']}
+            options={PROJECTS}
             onChange={set('project')}
           />
 
@@ -140,7 +116,7 @@ export default function ScheduleVisitScreen({ navigation }) {
 
           <View style={{ flexDirection: 'row', gap: spacing.md }}>
             <DateField placeholder="Select date" value={form.date} onChange={set('date')} style={{ flex: 1 }} />
-            <SelectField icon="clock" placeholder="Select time" value={form.time} options={visitTimeSlots} onChange={set('time')} style={{ flex: 1 }} />
+            <SelectField icon="clock" placeholder="Time slot" sheetTitle="Time Slot" value={form.time} options={timeSlots} onChange={set('time')} style={{ flex: 1 }} />
           </View>
 
           <TextField
@@ -159,24 +135,6 @@ export default function ScheduleVisitScreen({ navigation }) {
 }
 
 const s = StyleSheet.create({
-  roleCard: {
-    flex: 1,
-    height: 52,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.default,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceSecondary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-  },
-  roleCardActive: { borderColor: colors.brandPrimary, borderWidth: borderWidth.selected },
-  roleLabel: { ...type.body, color: colors.muted, flex: 1 },
-  group: { ...type.bodySmall, color: colors.onSurfaceTertiary },
-  hint: { ...type.caption, color: colors.muted, marginTop: -spacing.xs },
-  radio: { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.border },
-
   typeChip: {
     flex: 1,
     height: 44,

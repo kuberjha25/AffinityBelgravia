@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
@@ -14,10 +14,13 @@ import {
 } from '../components/ui';
 import { parseDisplayDate } from '../components/DateField';
 import { colors, spacing, type } from '../theme';
-import { visitFilters } from '../data';
+import { visitFilters, staffMembers } from '../data';
+import { matchesPhone } from '../format';
 import { useApp } from '../store';
 
 const SORTS = ['Latest visit first', 'Earliest visit first', 'Name A-Z'];
+const DATE_RANGES = { 'Any time': null, 'Next 7 days': 7, 'Last 7 days': -7, 'Last 30 days': -30 };
+const DAY = 24 * 60 * 60 * 1000;
 
 const MATCH = {
   Upcoming: ['Confirmed', 'Pending'],
@@ -25,48 +28,90 @@ const MATCH = {
   Cancelled: ['Cancelled'],
 };
 
-/** Figma frame: `site-visits-screen` (12:859). */
-export default function SiteVisitsScreen({ navigation }) {
-  const { visits } = useApp();
+const DEFAULTS = {
+  status: 'All',
+  project: 'All',
+  date: 'Any time',
+  associate: 'All',
+  staff: 'All',
+  sort: SORTS[0],
+};
+
+/**
+ * Figma frame: `site-visits-screen` (12:859).
+ * CP / Freelancer / Influencer: view-only status of their own visits (#2).
+ * Staff: every visit, plus "+" to schedule one on a CP's behalf (#3).
+ */
+export default function SiteVisitsScreen({ navigation, route }) {
+  const { visits, can } = useApp();
+  const canAdd = can('visit.add');
+  const isStaffView = can('visit.view.all');
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('All');
-  const [projectFilter, setProjectFilter] = useState('All');
-  const [sort, setSort] = useState(SORTS[0]);
+  const [f, setF] = useState(DEFAULTS);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const projectOptions = useMemo(
-    () => ['All', ...Array.from(new Set(visits.map((v) => v.project)))],
+  // #15: dashboard counts open this list pre-filtered.
+  const presetStatus = route?.params?.status;
+  useEffect(() => {
+    if (presetStatus) setF({ ...DEFAULTS, status: presetStatus });
+  }, [presetStatus, route?.params?.at]);
+
+  const uniq = (key) => Array.from(new Set(visits.map((v) => v[key]).filter(Boolean)));
+  const projectOptions = useMemo(() => ['All', ...uniq('project')], [visits]); // eslint-disable-line react-hooks/exhaustive-deps
+  const associateOptions = useMemo(
+    () => ['All', ...Array.from(new Set(visits.filter((v) => v.associateId).map((v) => v.bookedBy)))],
     [visits]
   );
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const days = DATE_RANGES[f.date];
+    const now = Date.now();
+    const t = (v) => parseDisplayDate(v.date) || now;
     const list = visits.filter((v) => {
-      if (filter !== 'All' && !MATCH[filter].includes(v.status)) return false;
-      if (projectFilter !== 'All' && v.project !== projectFilter) return false;
+      if (f.status !== 'All' && !MATCH[f.status].includes(v.status)) return false;
+      if (f.project !== 'All' && v.project !== f.project) return false;
+      if (f.associate !== 'All' && (!v.associateId || v.bookedBy !== f.associate)) return false;
+      if (f.staff !== 'All' && v.assignedTo !== f.staff) return false;
+      if (days > 0 && (t(v) < now - DAY || t(v) > now + days * DAY)) return false;
+      if (days < 0 && (t(v) > now || t(v) < now + days * DAY)) return false;
       if (!q) return true;
-      return v.name.toLowerCase().includes(q) || (v.phone || '').replace(/s/g, '').includes(q.replace(/s/g, ''));
+      return v.name.toLowerCase().includes(q) || matchesPhone(v, q);
     });
-    if (sort === 'Name A-Z') return [...list].sort((a, b) => a.name.localeCompare(b.name));
-    const dir = sort === 'Earliest visit first' ? 1 : -1;
-    const t = (v) => parseDisplayDate(v.date) || Date.now();
+    if (f.sort === 'Name A-Z') return [...list].sort((a, b) => a.name.localeCompare(b.name));
+    const dir = f.sort === 'Earliest visit first' ? 1 : -1;
     return [...list].sort((a, b) => dir * (t(a) - t(b)));
-  }, [visits, filter, projectFilter, sort, query]);
+  }, [visits, f, query]);
 
-  const activeFilters =
-    (filter !== 'All' ? 1 : 0) + (projectFilter !== 'All' ? 1 : 0) + (sort !== SORTS[0] ? 1 : 0);
+  const activeFilters = Object.keys(DEFAULTS).filter((k) => f[k] !== DEFAULTS[k]).length;
+
+  const sections = [
+    { id: 'status', title: 'Visit Status', options: visitFilters },
+    { id: 'project', title: 'Project', options: projectOptions },
+    { id: 'date', title: 'Visit Date', options: Object.keys(DATE_RANGES) },
+    ...(isStaffView
+      ? [
+          { id: 'associate', title: 'CP / Freelancer / Influencer', options: associateOptions },
+          { id: 'staff', title: 'Assigned Staff', options: ['All', ...staffMembers] },
+        ]
+      : []),
+    { id: 'sort', title: 'Sort By', options: SORTS },
+  ].map((sec) => ({ ...sec, value: f[sec.id] }));
 
   return (
     <Screen>
       <PageTitle
+        subtitle={isStaffView ? undefined : 'Status of visits booked under your name (view only)'}
         right={
-          <RoundIconButton
-            name="plus"
-            tone="dark"
-            size={44}
-            iconSize={20}
-            onPress={() => navigation.navigate('ScheduleVisit')}
-          />
+          canAdd ? (
+            <RoundIconButton
+              name="plus"
+              tone="dark"
+              size={44}
+              iconSize={20}
+              onPress={() => navigation.navigate('ScheduleVisit')}
+            />
+          ) : null
         }
       >
         Project Visits
@@ -82,8 +127,8 @@ export default function SiteVisitsScreen({ navigation }) {
 
       <ChipRow
         options={visitFilters}
-        value={filter}
-        onChange={setFilter}
+        value={f.status}
+        onChange={(status) => setF((prev) => ({ ...prev, status }))}
         style={{ marginTop: spacing.lg }}
         contentStyle={{ paddingHorizontal: spacing.xl }}
       />
@@ -120,28 +165,20 @@ export default function SiteVisitsScreen({ navigation }) {
         ))}
 
         {rows.length === 0 ? (
-          <EmptyState icon="calendar" title="No visits found" body="Adjust the filter or schedule a new visit." />
+          <EmptyState
+            icon="calendar"
+            title="No visits found"
+            body={canAdd ? 'Adjust the filter or schedule a new visit.' : 'Adjust the filter.'}
+          />
         ) : null}
       </View>
 
       <FilterSheet
         visible={filtersOpen}
         onClose={() => setFiltersOpen(false)}
-        sections={[
-          { id: 'status', title: 'Visit Status', options: visitFilters, value: filter },
-          { id: 'project', title: 'Project', options: projectOptions, value: projectFilter },
-          { id: 'sort', title: 'Sort By', options: SORTS, value: sort },
-        ]}
-        onApply={(v) => {
-          setFilter(v.status);
-          setProjectFilter(v.project);
-          setSort(v.sort);
-        }}
-        onReset={() => {
-          setFilter('All');
-          setProjectFilter('All');
-          setSort(SORTS[0]);
-        }}
+        sections={sections}
+        onApply={(v) => setF((prev) => ({ ...prev, ...v }))}
+        onReset={() => setF(DEFAULTS)}
       />
     </Screen>
   );
