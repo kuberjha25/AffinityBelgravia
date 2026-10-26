@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
 import {
@@ -9,124 +10,105 @@ import {
   SearchBar,
   StatusPill,
   EmptyState,
+  ErrorState,
+  LoadingState,
+  LoadMore,
   toneForStatus,
   FilterSheet,
 } from '../components/ui';
-import { parseDisplayDate } from '../components/DateField';
-import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { leadFilters, leadStatuses, staffMembers } from '../data';
-import { customerCategories, leadSources } from '../config';
-import { displayMobile, matchesPhone } from '../format';
-import { useApp } from '../store';
+import { colors, spacing, type } from '../theme';
+import { dateFilters, leadStatuses, leadTypes } from '../data';
+import { humanize, orDash } from '../format';
+import { usePermissions } from '../store';
+import { fetchLeads } from '../store/slices/leadsSlice';
+import { hasMore } from '../store/helpers';
+import { useDebounced, useLookup, useRefetchWhenStale } from '../hooks';
 
-const SORTS = ['Recently active', 'Oldest first', 'Name A-Z'];
-const DATE_RANGES = { 'Any time': 0, 'Last 7 days': 7, 'Last 30 days': 30, 'Last 90 days': 90 };
-const DAY = 24 * 60 * 60 * 1000;
+const ALL = 'All';
+const DEFAULTS = { status: '', type: ALL, source: ALL, date: dateFilters[0].label };
 
-const DEFAULTS = {
-  status: 'All',
-  type: 'All',
-  source: 'All',
-  category: 'All',
-  date: 'Any time',
-  associate: 'All',
-  staff: 'All',
-  sort: SORTS[0],
-};
-
-const TYPE_COLOR = {
-  Hot: colors.error,
-  Warm: colors.brandPrimary,
-  Cold: colors.info,
-};
+const statusChips = [{ id: '', label: 'All' }, ...leadStatuses.map((id) => ({ id, label: humanize(id) }))];
 
 /**
  * Figma frame: `leads-list-screen` (12:1965).
- * CP / Freelancer / Influencer: read-only list of their own leads (#2).
- * Staff: every lead, plus "+" to add one (#3).
+ * CP / Broker / Influencer / Freelancer: read-only list of their own leads (#2) —
+ * the backend scopes the list to the caller. Staff: "+" to add one (#3).
  */
 export default function LeadsScreen({ navigation, route }) {
-  const { leads, can } = useApp();
+  const dispatch = useDispatch();
+  const { can } = usePermissions();
   const canAdd = can('lead.add');
-  const isStaffView = can('lead.view.all');
+  const list = useSelector((state) => state.leads.list);
+  const sources = useLookup('sources');
   const [query, setQuery] = useState('');
-  const [f, setF] = useState(DEFAULTS);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-
+  const search = useDebounced(query.trim());
   // #15: dashboard counts open this list pre-filtered.
   const presetStatus = route?.params?.status;
+  const [f, setF] = useState(() => ({ ...DEFAULTS, status: presetStatus ?? '' }));
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
   useEffect(() => {
-    if (presetStatus) setF({ ...DEFAULTS, status: presetStatus });
+    if (presetStatus !== undefined) setF({ ...DEFAULTS, status: presetStatus });
   }, [presetStatus, route?.params?.at]);
 
-  const counts = useMemo(() => {
-    const map = {};
-    leads.forEach((l) => {
-      map[l.status] = (map[l.status] || 0) + 1;
-    });
-    return map;
-  }, [leads]);
-
-  const options = useMemo(
-    () => leadFilters.map((o) => (o.id === 'All' ? o : { ...o, count: counts[o.id] ?? 0 })),
-    [counts]
+  const params = useMemo(
+    () => ({
+      search: search || undefined,
+      status: f.status || undefined,
+      lead_type: f.type === ALL ? undefined : leadTypes.find((t) => t.label === f.type)?.id,
+      date_filter: dateFilters.find((d) => d.label === f.date)?.id || undefined,
+    }),
+    [search, f.status, f.type, f.date]
   );
 
-  const associateNames = useMemo(
-    () => Array.from(new Set(leads.map((l) => l.associateName).filter(Boolean))),
-    [leads]
-  );
+  const load = (page = 1) => dispatch(fetchLeads({ ...params, page }));
 
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const since = DATE_RANGES[f.date] ? Date.now() - DATE_RANGES[f.date] * DAY : 0;
-    const t = (l) => parseDisplayDate(l.activeOn) || Date.now(); // new leads ("Today") count as newest
-    const list = leads.filter((l) => {
-      if (f.status !== 'All' && l.status !== f.status) return false;
-      if (f.type !== 'All' && l.type !== f.type) return false;
-      if (f.source !== 'All' && l.source !== f.source) return false;
-      if (f.category !== 'All' && l.category !== f.category) return false;
-      if (f.associate !== 'All' && l.associateName !== f.associate) return false;
-      if (f.staff !== 'All' && l.assignedTo !== f.staff) return false;
-      if (since && t(l) < since) return false;
-      if (!q) return true;
-      return l.name.toLowerCase().includes(q) || matchesPhone(l, q);
-    });
-    if (f.sort === 'Name A-Z') return [...list].sort((a, b) => a.name.localeCompare(b.name));
-    const dir = f.sort === 'Oldest first' ? 1 : -1;
-    return [...list].sort((a, b) => dir * (t(a) - t(b)));
-  }, [leads, f, query]);
+  useEffect(() => {
+    load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
+
+  useRefetchWhenStale(list.stale, () => load(1));
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load(1);
+    setRefreshing(false);
+  };
+
+  // The server ignores ?source=, so the source filter is applied here.
+  const rows = useMemo(
+    () => (f.source === ALL ? list.items : list.items.filter((l) => l.source === f.source)),
+    [list.items, f.source]
+  );
 
   const activeFilters = Object.keys(DEFAULTS).filter((k) => f[k] !== DEFAULTS[k]).length;
 
+  const sourceNames = (sources.items || []).map((src) => src.name);
   const sections = [
-    { id: 'status', title: 'Lead Status', options: ['All', ...leadStatuses] },
-    { id: 'type', title: 'Lead Type', options: ['All', 'Hot', 'Warm', 'Cold'] },
-    { id: 'source', title: 'Lead Source', options: ['All', ...leadSources.map((src) => src.label)] },
-    { id: 'category', title: 'Customer Category', options: ['All', ...customerCategories] },
-    { id: 'date', title: 'Last Activity', options: Object.keys(DATE_RANGES) },
-    ...(isStaffView
-      ? [
-          { id: 'associate', title: 'CP / Freelancer / Influencer', options: ['All', ...associateNames] },
-          { id: 'staff', title: 'Assigned Staff', options: ['All', ...staffMembers] },
-        ]
-      : []),
-    { id: 'sort', title: 'Sort By', options: SORTS },
-  ].map((sec) => ({ ...sec, value: f[sec.id] }));
+    { id: 'status', title: 'Lead Status', options: statusChips.map((c) => c.label), value: statusChips.find((c) => c.id === f.status)?.label },
+    { id: 'type', title: 'Lead Type', options: [ALL, ...leadTypes.map((t) => t.label)], value: f.type },
+    { id: 'source', title: 'Lead Source', options: [ALL, ...sourceNames], value: f.source },
+    { id: 'date', title: 'Created', options: dateFilters.map((d) => d.label), value: f.date },
+  ];
+
+  const applyFilters = (v) =>
+    setF((prev) => ({
+      ...prev,
+      ...v,
+      status: statusChips.find((c) => c.label === v.status)?.id ?? prev.status,
+    }));
+
+  const firstLoad = list.status === 'loading' && list.page === 0;
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={onRefresh}>
       <PageTitle
-        subtitle={isStaffView ? undefined : 'Leads brought in under your name (view only)'}
+        subtitle={can('lead.view.all') ? undefined : 'Leads brought in under your name (view only)'}
         right={
           canAdd ? (
-            <RoundIconButton
-              name="plus"
-              tone="dark"
-              size={44}
-              iconSize={20}
-              onPress={() => navigation.navigate('NewLead')}
-            />
+            <RoundIconButton name="plus" tone="dark" size={44} iconSize={20} onPress={() => navigation.navigate('NewLead')} />
           ) : null
         }
       >
@@ -136,13 +118,14 @@ export default function LeadsScreen({ navigation, route }) {
       <SearchBar
         value={query}
         onChangeText={setQuery}
+        placeholder="Search by name, mobile, email or project"
         onFilterPress={() => setFiltersOpen(true)}
         filterCount={activeFilters}
         style={{ marginHorizontal: spacing.xl }}
       />
 
       <ChipRow
-        options={options}
+        options={statusChips}
         value={f.status}
         onChange={(status) => setF((prev) => ({ ...prev, status }))}
         style={{ marginTop: spacing.lg }}
@@ -150,54 +133,58 @@ export default function LeadsScreen({ navigation, route }) {
       />
 
       <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.md }}>
+        {list.status === 'succeeded' || list.items.length ? (
+          <Text style={s.count}>{`${list.total} ${list.total === 1 ? 'lead' : 'leads'}`}</Text>
+        ) : null}
+
         {rows.map((l) => (
           <Card key={l.id} onPress={() => navigation.navigate('LeadDetail', { id: l.id })}>
-            <View style={{ flexDirection: 'row' }}>
+            <View style={{ flexDirection: 'row', gap: spacing.md }}>
               <View style={{ flex: 1 }}>
-                <Text style={s.name}>{l.name}</Text>
-                <Text style={s.phone}>{displayMobile(l)}</Text>
+                <Text style={s.name}>{l.full_name}</Text>
+                <Text style={s.phone}>{orDash(l.mobile)}</Text>
               </View>
-              <StatusPill label={l.status} tone={toneForStatus(l.status)} />
+              <StatusPill label={humanize(l.status)} tone={toneForStatus(l.status)} />
             </View>
 
             <View style={[s.inline, { marginTop: spacing.md }]}>
               <Icon name="building" size={16} color={colors.brandPrimary} />
-              <Text style={s.project} numberOfLines={1}>{l.project}</Text>
+              <Text style={s.project} numberOfLines={1}>{orDash(l.project_name || l.project?.name)}</Text>
             </View>
 
-            {isStaffView && l.associateName ? (
-              <View style={[s.inline, { marginTop: spacing.xs }]}>
-                <Icon name="user" size={14} color={colors.muted} />
-                <Text style={s.meta} numberOfLines={1}>{`Via ${l.associateName}`}</Text>
-              </View>
-            ) : null}
-
             <View style={s.footerRow}>
-              <View style={[s.typeChip, { borderColor: TYPE_COLOR[l.type] }]}>
-                <Text style={[s.typeLabel, { color: TYPE_COLOR[l.type] }]}>{l.type}</Text>
-              </View>
-              <Text style={s.active}>{`Active: ${l.activeOn}`}</Text>
-              <View style={{ flex: 1 }} />
+              {l.source ? (
+                <>
+                  <Icon name="users" size={14} color={colors.muted} />
+                  <Text style={s.meta} numberOfLines={1}>{l.source}</Text>
+                </>
+              ) : (
+                <View style={{ flex: 1 }} />
+              )}
               <Text style={s.view}>View</Text>
               <Icon name="chevron-right" size={14} color={colors.muted} />
             </View>
           </Card>
         ))}
 
-        {rows.length === 0 ? (
-          <EmptyState
-            icon="users"
-            title="No leads found"
-            body={canAdd ? 'Try another filter or add a new lead.' : 'Try another filter.'}
-          />
+        {firstLoad ? <LoadingState /> : null}
+        {list.status === 'failed' && !list.items.length ? <ErrorState message={list.error} onRetry={() => load(1)} /> : null}
+        {list.status === 'succeeded' && rows.length === 0 ? (
+          <EmptyState icon="users" title="No leads found" body={canAdd ? 'Try another filter or add a new lead.' : 'Try another filter.'} />
         ) : null}
+
+        <LoadMore
+          visible={hasMore(list)}
+          loading={list.status === 'loading' && list.page > 0}
+          onPress={() => load(list.page + 1)}
+        />
       </View>
 
       <FilterSheet
         visible={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         sections={sections}
-        onApply={(v) => setF((prev) => ({ ...prev, ...v }))}
+        onApply={applyFilters}
         onReset={() => setF(DEFAULTS)}
       />
     </Screen>
@@ -205,20 +192,12 @@ export default function LeadsScreen({ navigation, route }) {
 }
 
 const s = StyleSheet.create({
+  count: { ...type.caption, color: colors.muted },
   name: { ...type.body, color: colors.onSurface },
   phone: { ...type.bodySmall, color: colors.muted, marginTop: 2 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   project: { ...type.body, color: colors.onSurface, flex: 1 },
   meta: { ...type.caption, color: colors.muted, flex: 1 },
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
-  typeChip: {
-    height: 24,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.sm,
-    borderWidth: borderWidth.default,
-    justifyContent: 'center',
-  },
-  typeLabel: { ...type.caption },
-  active: { ...type.caption, color: colors.brandPrimary },
   view: { ...type.caption, color: colors.muted },
 });

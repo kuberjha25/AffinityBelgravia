@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Alert, Linking, Pressable } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
 import {
@@ -7,79 +8,98 @@ import {
   Divider,
   KeyValue,
   PrimaryButton,
-  SelectField,
   StatusPill,
+  TextField,
   toneForStatus,
-  EmptyState,
+  LoadingState,
+  ErrorState,
 } from '../components/ui';
-import { displayMobile } from '../format';
+import { colors, radius, spacing, type } from '../theme';
+import { fromApiDate, humanize, isMasked, orDash } from '../format';
+import { usePermissions } from '../store';
+import { attendVisit, fetchVisit } from '../store/slices/visitsSlice';
 
-/** Visit status options staff can set, with the matching detail status. */
-const STATUS_OPTIONS = {
-  Confirmed: 'Upcoming',
-  Pending: 'Upcoming',
-  'In Progress': 'In Progress',
-  Completed: 'Completed',
-  Cancelled: 'Cancelled',
-};
-import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { useApp } from '../store';
-import { parseDisplayDate } from '../components/DateField';
-
-/** Figma frame: `visit-detail-screen` (12:1020). */
+/** Figma frame: `visit-detail-screen` (12:1020). Staff can mark a visit attended. */
 export default function VisitDetailScreen({ route }) {
-  const { visits, updateVisit, can } = useApp();
-  const visit = visits.find((v) => v.id === route.params?.id) || { history: [] };
-  const canUpdate = can('visit.updateStatus');
-  const [order, setOrder] = useState('Latest First');
-  const [expanded, setExpanded] = useState(null);
+  const dispatch = useDispatch();
+  const id = route.params?.id;
+  const visit = useSelector((state) => state.visits.details[id]);
+  const status = useSelector((state) => state.visits.detailsStatus[id]);
+  const error = useSelector((state) => state.visits.detailsError[id]);
+  const { can } = usePermissions();
+  const [remarks, setRemarks] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const history = useMemo(() => {
-    // Sort by date. History is recorded newest-first, so undated or same-day
-    // entries fall back to that recorded order (reversed for Oldest First).
-    const list = (visit.history || []).map((h, i) => ({ h, i, t: parseDisplayDate(h.date) }));
-    const dir = order === 'Latest First' ? -1 : 1;
-    list.sort((a, b) => (a.t && b.t && a.t !== b.t ? dir * (a.t - b.t) : -dir * (a.i - b.i)));
-    return list.map((x) => x.h);
-  }, [visit.history, order]);
+  useEffect(() => {
+    if (id) dispatch(fetchVisit(id));
+  }, [dispatch, id]);
 
-  const endVisit = () => updateVisit(visit.id, { visitStatus: 'Completed', status: 'Completed' });
-  const active = visit.visitStatus === 'In Progress';
-
-  if (!visit.id) {
+  if (!visit) {
     return (
       <Screen showBack>
-        <PageTitle>Project Visits Details</PageTitle>
-        <EmptyState icon="calendar" title="Visit not available" body="This visit was removed or is not assigned to you." />
+        <PageTitle>Project Visit Details</PageTitle>
+        {status === 'failed' ? <ErrorState message={error} onRetry={() => dispatch(fetchVisit(id))} /> : <LoadingState />}
       </Screen>
     );
   }
 
+  const open = ['scheduled', 'in_progress'].includes(visit.status);
+  const canAttend = can('visit.updateStatus') && open;
+
+  const markAttended = async () => {
+    if (!remarks.trim()) {
+      Alert.alert('Remarks', 'Please add a note about how the visit went.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await dispatch(attendVisit({ id: visit.id, remarks: remarks.trim() })).unwrap();
+      setRemarks('');
+      Alert.alert('Visit updated', 'The visit has been marked as attended.');
+    } catch (message) {
+      Alert.alert('Could not update visit', String(message));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const callable = visit.mobile && !isMasked(visit.mobile);
+  const mailable = visit.email && !isMasked(visit.email);
+
   return (
-    <Screen showBack>
-      <PageTitle>Project Visits Details</PageTitle>
+    <Screen showBack onRefresh={() => dispatch(fetchVisit(id))}>
+      <PageTitle>Project Visit Details</PageTitle>
 
       <View style={{ paddingHorizontal: spacing.xl, gap: spacing.lg }}>
         <Card>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={[s.name, { flex: 1 }]}>{visit.name}</Text>
-            <StatusPill
-              label={active ? 'Current Visit' : visit.visitStatus}
-              tone={active ? 'success' : toneForStatus(visit.visitStatus)}
-            />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <Text style={[s.name, { flex: 1 }]}>{visit.visitor_name}</Text>
+            <StatusPill label={humanize(visit.status)} tone={toneForStatus(visit.status)} />
           </View>
           <Divider style={{ marginVertical: spacing.md }} />
 
           <View style={{ flexDirection: 'row' }}>
             <View style={{ flex: 1, gap: spacing.md, paddingRight: spacing.md }}>
-              <View style={s.inline}>
-                <Icon name="phone-off" size={16} color={colors.brandPrimary} />
-                <Text style={s.contact} numberOfLines={1}>{displayMobile(visit)}</Text>
-              </View>
-              <View style={s.inline}>
+              <Pressable
+                style={s.inline}
+                disabled={!callable}
+                onPress={() => Linking.openURL(`tel:${visit.mobile}`)}
+              >
+                <Icon name="phone" size={16} color={colors.brandPrimary} />
+                <Text style={[s.contact, callable && { color: colors.brandPrimary }]} numberOfLines={1}>
+                  {orDash(visit.mobile)}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={s.inline}
+                disabled={!mailable}
+                onPress={() => Linking.openURL(`mailto:${visit.email}`)}
+              >
                 <Icon name="mail" size={16} color={colors.brandPrimary} />
-                <Text style={s.contact} numberOfLines={1}>{visit.email}</Text>
-              </View>
+                <Text style={[s.contact, mailable && { color: colors.brandPrimary }]} numberOfLines={1}>
+                  {orDash(visit.email)}
+                </Text>
+              </Pressable>
             </View>
 
             <View style={s.vRule} />
@@ -91,8 +111,8 @@ export default function VisitDetailScreen({ route }) {
                   <Text style={s.kvLabel}>Lead Type</Text>
                 </View>
                 <StatusPill
-                  label={visit.leadType}
-                  tone={visit.leadType === 'HOT' ? 'warning' : 'neutral'}
+                  label={visit.lead_type ? humanize(visit.lead_type).toUpperCase() : '—'}
+                  tone={visit.lead_type === 'hot' ? 'warning' : 'neutral'}
                   style={{ marginTop: 4 }}
                   textStyle={{ letterSpacing: 1 }}
                 />
@@ -102,33 +122,27 @@ export default function VisitDetailScreen({ route }) {
                   <Icon name="home" size={14} color={colors.brandPrimary} />
                   <Text style={s.kvLabel}>Project</Text>
                 </View>
-                <Text style={s.kvValueSpaced} numberOfLines={1}>{visit.project}</Text>
+                <Text style={s.kvValue} numberOfLines={1}>{orDash(visit.project_name)}</Text>
               </View>
               <View>
                 <View style={s.inline}>
                   <Icon name="user" size={14} color={colors.brandPrimary} />
                   <Text style={s.kvLabel}>Booked By</Text>
                 </View>
-                <Text style={s.kvValue}>{visit.bookedByType}</Text>
+                <Text style={s.kvValue}>{orDash(visit.booked_by)}</Text>
               </View>
             </View>
           </View>
         </Card>
 
         <Card style={{ flexDirection: 'row', gap: spacing.lg }}>
-          <KeyValue label="Visit Date" value={visit.date} icon="calendar" style={{ flex: 1 }} compact />
-          <KeyValue label="Visit Time" value={visit.time} icon="clock" style={{ flex: 1 }} compact />
-          <View style={{ flex: 1 }}>
-            <View style={s.inline}>
-              <Icon name="circle-check" size={14} color={colors.brandPrimary} />
-              <Text style={s.kvLabel}>Status</Text>
-            </View>
-            <StatusPill
-              label={visit.visitStatus}
-              tone={toneForStatus(visit.visitStatus)}
-              style={{ marginTop: 4 }}
-            />
-          </View>
+          <KeyValue label="Visit Date" value={fromApiDate(visit.visit_date) || '—'} icon="calendar" style={{ flex: 1 }} compact />
+          <KeyValue label="Visit Time" value={orDash(visit.visit_time)} icon="clock" style={{ flex: 1.3 }} compact />
+        </Card>
+
+        <Card style={{ flexDirection: 'row', gap: spacing.lg }}>
+          <KeyValue label="Assigned Staff" value={orDash(visit.assigned_to === 'Unassigned' ? null : visit.assigned_to)} icon="briefcase" style={{ flex: 1 }} compact />
+          <KeyValue label="Visit Type" value={visit.visit_type && visit.visit_type !== '-' ? humanize(visit.visit_type) : '—'} icon="users" style={{ flex: 1 }} compact />
         </Card>
 
         <Card>
@@ -137,86 +151,31 @@ export default function VisitDetailScreen({ route }) {
               <Icon name="notepad-text" size={18} color={colors.brandPrimary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.noteTitle}>{active ? 'Current Visit Notes' : 'Visit Notes'}</Text>
-              <Text style={s.noteBody}>{visit.notes}</Text>
+              <Text style={s.noteTitle}>Visit Notes</Text>
+              <Text style={s.noteBody}>{visit.remarks || 'No notes added yet.'}</Text>
             </View>
-            <Icon name="chevron-right" size={18} color={colors.muted} />
           </View>
-          {canUpdate ? (
+          {canAttend ? (
             <>
               <Divider style={{ marginVertical: spacing.lg }} />
-              <SelectField
-                label="Update Visit Status"
-                value={active ? 'In Progress' : visit.status}
-                options={Object.keys(STATUS_OPTIONS)}
-                onChange={(status) => updateVisit(visit.id, { status, visitStatus: STATUS_OPTIONS[status] })}
+              <TextField
+                label="Visit outcome"
+                placeholder="e.g. Client liked the sample flat. Will follow up next week."
+                value={remarks}
+                onChangeText={setRemarks}
+                multiline
+                maxLength={500}
               />
-              {active ? (
-                <PrimaryButton
-                  label="End Current Visit"
-                  icon="circle-check"
-                  onPress={endVisit}
-                  style={{ marginTop: spacing.md }}
-                />
-              ) : null}
+              <PrimaryButton
+                label="Mark as Attended"
+                icon="circle-check"
+                onPress={markAttended}
+                loading={saving}
+                style={{ marginTop: spacing.md }}
+              />
             </>
           ) : null}
         </Card>
-
-        {visit.assignedTo ? (
-          <Card style={{ flexDirection: 'row', gap: spacing.lg }}>
-            <KeyValue label="Assigned Staff" value={visit.assignedTo} icon="briefcase" style={{ flex: 1 }} compact />
-            {visit.associateId ? (
-              <KeyValue label="Brought by" value={visit.bookedBy} icon="users" style={{ flex: 1 }} compact />
-            ) : null}
-          </Card>
-        ) : null}
-
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={[s.sectionTitle, { flex: 1 }]}>Visit History</Text>
-          <SelectField
-            value={order}
-            options={['Latest First', 'Oldest First']}
-            onChange={setOrder}
-            style={{ width: 150 }}
-          />
-        </View>
-
-        <View>
-          {history.map((h, i) => (
-            <View key={h.id} style={s.timelineRow}>
-              <View style={s.timelineRail}>
-                <View style={s.timelineDot} />
-                {i < history.length - 1 ? <View style={s.timelineLine} /> : null}
-              </View>
-
-              <Pressable
-                style={{ flex: 1 }}
-                onPress={() => setExpanded(expanded === h.id ? null : h.id)}
-              >
-                <View style={s.timelineChip}>
-                  <Text style={s.timelineChipLabel}>{h.date || 'Visit'}</Text>
-                </View>
-                <Card style={{ marginTop: spacing.sm, flexDirection: 'row', gap: spacing.md }}>
-                  <View style={{ width: 74 }}>
-                    <Text style={s.histTime}>{h.time}</Text>
-                    <Text style={s.histDuration}>{h.duration}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <StatusPill label={h.status} tone={toneForStatus(h.status)} />
-                    <Text
-                      style={s.histNote}
-                      numberOfLines={expanded === h.id ? undefined : 3}
-                    >
-                      {h.note}
-                    </Text>
-                  </View>
-                </Card>
-              </Pressable>
-            </View>
-          ))}
-          {history.length === 0 ? <Text style={s.emptyHistory}>No visit history yet.</Text> : null}
-        </View>
       </View>
     </Screen>
   );
@@ -229,7 +188,6 @@ const s = StyleSheet.create({
   vRule: { width: 1, backgroundColor: colors.divider },
   kvLabel: { ...type.caption, color: colors.muted },
   kvValue: { ...type.bodySmall, color: colors.onSurface, marginTop: 2 },
-  kvValueSpaced: { ...type.bodySmall, color: colors.onSurface, marginTop: 2, letterSpacing: 2 },
 
   noteIcon: {
     width: 36,
@@ -241,25 +199,4 @@ const s = StyleSheet.create({
   },
   noteTitle: { ...type.body, color: colors.onSurface },
   noteBody: { ...type.bodySmall, color: colors.muted, marginTop: spacing.xs },
-
-  sectionTitle: { ...type.heading, color: colors.onSurface },
-
-  timelineRow: { flexDirection: 'row', gap: spacing.md },
-  timelineRail: { width: 10, alignItems: 'center', paddingTop: 6 },
-  timelineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brandPrimary },
-  timelineLine: { flex: 1, width: 1, backgroundColor: colors.border, marginTop: 4 },
-  timelineChip: {
-    alignSelf: 'flex-start',
-    minWidth: 96,
-    height: 24,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.sm,
-    backgroundColor: colors.brandPrimary,
-    justifyContent: 'center',
-  },
-  timelineChipLabel: { ...type.caption, color: colors.onBrand },
-  histTime: { ...type.body, color: colors.onSurface },
-  histDuration: { ...type.caption, color: colors.muted, marginTop: 2 },
-  histNote: { ...type.bodySmall, color: colors.muted, marginTop: spacing.sm },
-  emptyHistory: { ...type.bodySmall, color: colors.muted },
 });

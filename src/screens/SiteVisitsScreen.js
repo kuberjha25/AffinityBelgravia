@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
 import {
@@ -9,108 +10,93 @@ import {
   SearchBar,
   StatusPill,
   EmptyState,
+  ErrorState,
+  LoadingState,
+  LoadMore,
   toneForStatus,
   FilterSheet,
 } from '../components/ui';
-import { parseDisplayDate } from '../components/DateField';
 import { colors, spacing, type } from '../theme';
-import { visitFilters, staffMembers } from '../data';
-import { matchesPhone } from '../format';
-import { useApp } from '../store';
+import { dateFilters, visitStatuses } from '../data';
+import { fromApiDate, humanize } from '../format';
+import { usePermissions } from '../store';
+import { fetchVisits } from '../store/slices/visitsSlice';
+import { hasMore } from '../store/helpers';
+import { useDebounced, useRefetchWhenStale } from '../hooks';
 
-const SORTS = ['Latest visit first', 'Earliest visit first', 'Name A-Z'];
-const DATE_RANGES = { 'Any time': null, 'Next 7 days': 7, 'Last 7 days': -7, 'Last 30 days': -30 };
-const DAY = 24 * 60 * 60 * 1000;
+const statusChips = [{ id: '', label: 'All' }, ...visitStatuses.map((id) => ({ id, label: humanize(id) }))];
+const DEFAULTS = { status: '', date: dateFilters[0].label };
 
-const MATCH = {
-  Upcoming: ['Confirmed', 'Pending'],
-  Completed: ['Completed'],
-  Cancelled: ['Cancelled'],
-};
-
-const DEFAULTS = {
-  status: 'All',
-  project: 'All',
-  date: 'Any time',
-  associate: 'All',
-  staff: 'All',
-  sort: SORTS[0],
+/** "10:00" → "10:00 AM" */
+const clock = (hhmm) => {
+  const m = String(hhmm || '').match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return hhmm || '';
+  const h = Number(m[1]);
+  return `${((h + 11) % 12) + 1}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
 };
 
 /**
  * Figma frame: `site-visits-screen` (12:859).
- * CP / Freelancer / Influencer: view-only status of their own visits (#2).
- * Staff: every visit, plus "+" to schedule one on a CP's behalf (#3).
+ * CP / Broker / Influencer / Freelancer: view-only status of their own visits (#2).
+ * Staff: "+" to schedule one (#3).
  */
 export default function SiteVisitsScreen({ navigation, route }) {
-  const { visits, can } = useApp();
+  const dispatch = useDispatch();
+  const { can } = usePermissions();
   const canAdd = can('visit.add');
-  const isStaffView = can('visit.view.all');
+  const list = useSelector((state) => state.visits.list);
   const [query, setQuery] = useState('');
-  const [f, setF] = useState(DEFAULTS);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-
+  const search = useDebounced(query.trim());
   // #15: dashboard counts open this list pre-filtered.
   const presetStatus = route?.params?.status;
+  const [f, setF] = useState(() => ({ ...DEFAULTS, status: presetStatus ?? '' }));
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
   useEffect(() => {
-    if (presetStatus) setF({ ...DEFAULTS, status: presetStatus });
+    if (presetStatus !== undefined) setF({ ...DEFAULTS, status: presetStatus });
   }, [presetStatus, route?.params?.at]);
 
-  const uniq = (key) => Array.from(new Set(visits.map((v) => v[key]).filter(Boolean)));
-  const projectOptions = useMemo(() => ['All', ...uniq('project')], [visits]); // eslint-disable-line react-hooks/exhaustive-deps
-  const associateOptions = useMemo(
-    () => ['All', ...Array.from(new Set(visits.filter((v) => v.associateId).map((v) => v.bookedBy)))],
-    [visits]
+  const params = useMemo(
+    () => ({
+      search: search || undefined,
+      status: f.status || undefined,
+      date_filter: dateFilters.find((d) => d.label === f.date)?.id || undefined,
+    }),
+    [search, f.status, f.date]
   );
 
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const days = DATE_RANGES[f.date];
-    const now = Date.now();
-    const t = (v) => parseDisplayDate(v.date) || now;
-    const list = visits.filter((v) => {
-      if (f.status !== 'All' && !MATCH[f.status].includes(v.status)) return false;
-      if (f.project !== 'All' && v.project !== f.project) return false;
-      if (f.associate !== 'All' && (!v.associateId || v.bookedBy !== f.associate)) return false;
-      if (f.staff !== 'All' && v.assignedTo !== f.staff) return false;
-      if (days > 0 && (t(v) < now - DAY || t(v) > now + days * DAY)) return false;
-      if (days < 0 && (t(v) > now || t(v) < now + days * DAY)) return false;
-      if (!q) return true;
-      return v.name.toLowerCase().includes(q) || matchesPhone(v, q);
-    });
-    if (f.sort === 'Name A-Z') return [...list].sort((a, b) => a.name.localeCompare(b.name));
-    const dir = f.sort === 'Earliest visit first' ? 1 : -1;
-    return [...list].sort((a, b) => dir * (t(a) - t(b)));
-  }, [visits, f, query]);
+  const load = (page = 1) => dispatch(fetchVisits({ ...params, page }));
+
+  useEffect(() => {
+    load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
+
+  useRefetchWhenStale(list.stale, () => load(1));
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load(1);
+    setRefreshing(false);
+  };
 
   const activeFilters = Object.keys(DEFAULTS).filter((k) => f[k] !== DEFAULTS[k]).length;
 
   const sections = [
-    { id: 'status', title: 'Visit Status', options: visitFilters },
-    { id: 'project', title: 'Project', options: projectOptions },
-    { id: 'date', title: 'Visit Date', options: Object.keys(DATE_RANGES) },
-    ...(isStaffView
-      ? [
-          { id: 'associate', title: 'CP / Freelancer / Influencer', options: associateOptions },
-          { id: 'staff', title: 'Assigned Staff', options: ['All', ...staffMembers] },
-        ]
-      : []),
-    { id: 'sort', title: 'Sort By', options: SORTS },
-  ].map((sec) => ({ ...sec, value: f[sec.id] }));
+    { id: 'status', title: 'Visit Status', options: statusChips.map((c) => c.label), value: statusChips.find((c) => c.id === f.status)?.label },
+    { id: 'date', title: 'Visit Date', options: dateFilters.map((d) => d.label), value: f.date },
+  ];
+
+  const firstLoad = list.status === 'loading' && list.page === 0;
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={onRefresh}>
       <PageTitle
-        subtitle={isStaffView ? undefined : 'Status of visits booked under your name (view only)'}
+        subtitle={can('visit.view.all') ? undefined : 'Status of visits booked under your name (view only)'}
         right={
           canAdd ? (
-            <RoundIconButton
-              name="plus"
-              tone="dark"
-              size={44}
-              iconSize={20}
-              onPress={() => navigation.navigate('ScheduleVisit')}
-            />
+            <RoundIconButton name="plus" tone="dark" size={44} iconSize={20} onPress={() => navigation.navigate('ScheduleVisit')} />
           ) : null
         }
       >
@@ -120,13 +106,14 @@ export default function SiteVisitsScreen({ navigation, route }) {
       <SearchBar
         value={query}
         onChangeText={setQuery}
+        placeholder="Search by visitor name or mobile"
         onFilterPress={() => setFiltersOpen(true)}
         filterCount={activeFilters}
         style={{ marginHorizontal: spacing.xl }}
       />
 
       <ChipRow
-        options={visitFilters}
+        options={statusChips}
         value={f.status}
         onChange={(status) => setF((prev) => ({ ...prev, status }))}
         style={{ marginTop: spacing.lg }}
@@ -134,50 +121,60 @@ export default function SiteVisitsScreen({ navigation, route }) {
       />
 
       <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.md }}>
-        {rows.map((v) => (
+        {list.items.map((v) => (
           <Card key={v.id} onPress={() => navigation.navigate('VisitDetail', { id: v.id })}>
             <View style={{ flexDirection: 'row' }}>
               <View style={{ flex: 1, paddingRight: spacing.md }}>
-                <Text style={s.name}>{v.name}</Text>
+                <Text style={s.name}>{v.visitor_name}</Text>
                 <Text style={s.meta}>
                   <Text style={s.metaLabel}>Project: </Text>
-                  {v.project}
+                  {v.project_name || '—'}
                 </Text>
-                <Text style={s.meta}>
-                  <Text style={s.metaLabel}>Booked by: </Text>
-                  {v.bookedBy}
-                </Text>
+                {v.visit_type ? (
+                  <Text style={s.meta}>
+                    <Text style={s.metaLabel}>Visit type: </Text>
+                    {humanize(v.visit_type)}
+                  </Text>
+                ) : null}
               </View>
 
               <View style={{ alignItems: 'flex-end', gap: spacing.sm }}>
                 <View style={s.inline}>
                   <Icon name="calendar" size={14} color={colors.brandPrimary} />
-                  <Text style={s.date}>{v.date}</Text>
+                  <Text style={s.date}>{fromApiDate(v.visit_date)}</Text>
                 </View>
-                <View style={s.inline}>
-                  <Icon name="clock" size={14} color={colors.brandPrimary} />
-                  <Text style={s.time}>{v.time}</Text>
-                </View>
-                <StatusPill label={v.status} tone={toneForStatus(v.status)} />
+                {v.visit_time ? (
+                  <View style={s.inline}>
+                    <Icon name="clock" size={14} color={colors.brandPrimary} />
+                    <Text style={s.time}>{clock(v.visit_time)}</Text>
+                  </View>
+                ) : null}
+                <StatusPill label={humanize(v.status)} tone={toneForStatus(v.status)} />
               </View>
             </View>
           </Card>
         ))}
 
-        {rows.length === 0 ? (
-          <EmptyState
-            icon="calendar"
-            title="No visits found"
-            body={canAdd ? 'Adjust the filter or schedule a new visit.' : 'Adjust the filter.'}
-          />
+        {firstLoad ? <LoadingState /> : null}
+        {list.status === 'failed' && !list.items.length ? <ErrorState message={list.error} onRetry={() => load(1)} /> : null}
+        {list.status === 'succeeded' && list.items.length === 0 ? (
+          <EmptyState icon="calendar" title="No visits found" body={canAdd ? 'Adjust the filter or schedule a new visit.' : 'Adjust the filter.'} />
         ) : null}
+
+        <LoadMore
+          visible={hasMore(list)}
+          loading={list.status === 'loading' && list.page > 0}
+          onPress={() => load(list.page + 1)}
+        />
       </View>
 
       <FilterSheet
         visible={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         sections={sections}
-        onApply={(v) => setF((prev) => ({ ...prev, ...v }))}
+        onApply={(v) =>
+          setF((prev) => ({ ...prev, date: v.date, status: statusChips.find((c) => c.label === v.status)?.id ?? prev.status }))
+        }
         onReset={() => setF(DEFAULTS)}
       />
     </Screen>

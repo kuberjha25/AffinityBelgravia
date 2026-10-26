@@ -1,91 +1,175 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
-import { Card, ChipRow, Divider, Donut } from '../components/ui';
+import DateField from '../components/DateField';
+import { Card, ChipRow, Donut, EmptyState, ErrorState, LoadingState } from '../components/ui';
 import { colors, radius, spacing, type, borderWidth, shadow } from '../theme';
-import { misPeriods, misReport } from '../data';
+import { toApiDate, fromApiDate, todayApiDate } from '../format';
+import { usePermissions } from '../store';
+import { fetchMis } from '../store/slices/dashboardSlice';
 
-/** Figma frame: `mis-report-screen` (12:1308). */
+const PERIODS = [
+  { id: 'today', label: 'Daily' },
+  { id: 'this_week', label: 'Weekly' },
+  { id: 'this_month', label: 'Monthly' },
+  { id: 'custom', label: 'Custom' },
+];
+
+const SEGMENT_COLORS = ['#8a857c', '#4a4741', '#b19777', '#b4534a'];
+
+const segmentsOf = (parts) => {
+  const total = parts.reduce((n, p) => n + (p.value || 0), 0);
+  return {
+    total,
+    segments: parts.map((p, i) => ({
+      id: p.label,
+      label: p.label,
+      value: p.value ?? 0,
+      pct: total ? Math.round(((p.value || 0) / total) * 100) : 0,
+      color: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+    })),
+  };
+};
+
+/**
+ * Figma frame: `mis-report-screen` (12:1308).
+ * The backend has no report endpoint yet, so the figures are the filtered
+ * totals of the visits, leads and registrations lists for the chosen period.
+ */
 export default function MISReportScreen() {
-  const [period, setPeriod] = useState('Daily');
+  const dispatch = useDispatch();
+  const { can } = usePermissions();
+  const { mis, misStatus, misError } = useSelector((state) => state.dashboard);
+  const [period, setPeriod] = useState('today');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [updatedAt, setUpdatedAt] = useState(null);
+
+  const startIso = toApiDate(start);
+  const endIso = toApiDate(end);
+  const customReady = period !== 'custom' || (startIso && endIso && startIso <= endIso);
+
+  const params = useMemo(
+    () =>
+      period === 'custom'
+        ? { date_filter: 'custom', start_date: startIso, end_date: endIso }
+        : { date_filter: period },
+    [period, startIso, endIso]
+  );
+
+  const load = () => {
+    if (!customReady) return;
+    dispatch(fetchMis(params)).then((a) => {
+      if (!a.error) setUpdatedAt(new Date());
+    });
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, customReady]);
+
+  if (!can('mis.view')) {
+    return (
+      <Screen showBack>
+        <PageTitle>MIS Report</PageTitle>
+        <EmptyState icon="trending-up" title="Not available" body="MIS reports are available to the Affinity Belgravia team." />
+      </Screen>
+    );
+  }
+
+  const n = (v) => (v === null || v === undefined ? '—' : String(v));
+  const registrations = mis ? (mis.registrationsPending || 0) + (mis.registrationsCompleted || 0) : null;
+  const tiles = mis
+    ? [
+        { id: 'm1', value: n(mis.visits), label: 'Total Visits' },
+        { id: 'm2', value: n(mis.visitsCompleted), label: 'Attended Visits' },
+        { id: 'm3', value: n(registrations), label: 'New Registrations' },
+        { id: 'm4', value: n(mis.leads), label: 'New Leads' },
+        { id: 'm5', value: n(mis.leadsBooked), label: 'Bookings' },
+      ]
+    : [];
+
+  const visitsSummary = mis
+    ? segmentsOf([
+        { label: 'Scheduled', value: mis.visitsScheduled },
+        { label: 'In Progress', value: mis.visitsInProgress },
+        { label: 'Attended', value: mis.visitsCompleted },
+        { label: 'Cancelled', value: mis.visitsCancelled },
+      ])
+    : null;
+  const registrationsSummary = mis
+    ? segmentsOf([
+        { label: 'Pending', value: mis.registrationsPending },
+        { label: 'Completed', value: mis.registrationsCompleted },
+      ])
+    : null;
+
+  const periodLabel = {
+    today: fromApiDate(todayApiDate()),
+    this_week: 'This week',
+    this_month: 'This month',
+    custom: customReady ? `${fromApiDate(startIso)} – ${fromApiDate(endIso)}` : 'Select a date range',
+  }[period];
 
   return (
-    <Screen showBack>
+    <Screen showBack onRefresh={load}>
       <PageTitle>MIS Report</PageTitle>
 
-      <ChipRow
-        options={misPeriods}
-        value={period}
-        onChange={setPeriod}
-        contentStyle={{ paddingHorizontal: spacing.xl }}
-      />
+      <ChipRow options={PERIODS} value={period} onChange={setPeriod} contentStyle={{ paddingHorizontal: spacing.xl }} />
+
+      {period === 'custom' ? (
+        <View style={s.customRow}>
+          <DateField placeholder="From" value={start} onChange={setStart} style={{ flex: 1 }} />
+          <DateField placeholder="To" value={end} onChange={setEnd} style={{ flex: 1 }} />
+        </View>
+      ) : null}
+      {period === 'custom' && startIso && endIso && startIso > endIso ? (
+        <Text style={[s.note, { color: colors.error, marginTop: spacing.sm }]}>The end date must be on or after the start date.</Text>
+      ) : null}
 
       <View style={s.dateRow}>
-        <View style={s.inline}>
-          <Icon name="calendar" size={16} color={colors.brandPrimary} />
-          <Text style={s.date}>{misReport.date}</Text>
-        </View>
-        <Pressable
-          style={s.downloadBtn}
-          onPress={() => Alert.alert('Download Report', `${period} MIS report queued for download.`)}
-        >
-          <Icon name="download" size={14} color={colors.brandPrimary} />
-          <Text style={s.downloadLabel}>Download Report</Text>
-        </Pressable>
+        <Icon name="calendar" size={16} color={colors.brandPrimary} />
+        <Text style={s.date}>{periodLabel}</Text>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: spacing.xl, gap: spacing.md }}
-      >
-        {misReport.tiles.map((t, i) => (
-          <View key={t.id} style={[s.tile, i % 2 === 1 && { backgroundColor: colors.surfaceSecondary }]}>
-            <Text style={s.tileValue}>{t.value}</Text>
-            <Text style={s.tileLabel}>{t.label}</Text>
-            <Text style={s.tileDelta}>{t.delta}</Text>
-          </View>
-        ))}
-      </ScrollView>
+      {misStatus === 'loading' && !mis ? <LoadingState /> : null}
+      {misStatus === 'failed' ? <ErrorState message={misError} onRetry={load} /> : null}
 
-      <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.lg }}>
-        <SummaryCard title="Visits Summary" summary={misReport.visitsSummary} />
-        <SummaryCard title="Registrations Summary" summary={misReport.registrationsSummary} />
-
-        <Card>
-          <Text style={s.cardTitle}>Top Projects by Visits</Text>
-          <View style={s.tableHead}>
-            <Text style={[s.tableHeadCell, { flex: 1 }]}>Project Name</Text>
-            <Text style={s.tableHeadCell}>Total Visits</Text>
-          </View>
-          {misReport.topProjects.map((p, i) => (
-            <View key={p.id}>
-              <Divider />
-              <View style={s.tableRow}>
-                <Text style={[s.projectName, { flex: 1 }]} numberOfLines={1}>{p.name}</Text>
-                <Text style={[s.projectVisits, i > 0 && { color: colors.brandPrimary }]}>{p.visits}</Text>
+      {mis && customReady ? (
+        <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.xl, gap: spacing.md }}>
+            {tiles.map((t, i) => (
+              <View key={t.id} style={[s.tile, i % 2 === 1 && { backgroundColor: colors.surfaceSecondary }]}>
+                <Text style={s.tileValue}>{t.value}</Text>
+                <Text style={s.tileLabel}>{t.label}</Text>
               </View>
-            </View>
-          ))}
-        </Card>
+            ))}
+          </ScrollView>
 
-        <Text style={s.note}>{misReport.updatedNote}</Text>
-      </View>
+          <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.lg }}>
+            <SummaryCard title="Visits Summary" centerLabel="Total Visits" summary={visitsSummary} />
+            <SummaryCard title="Registrations Summary" centerLabel="Total" summary={registrationsSummary} />
+            {updatedAt ? (
+              <Text style={s.note}>
+                {`Updated ${updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${misStatus === 'loading' ? ' • refreshing…' : ''}`}
+              </Text>
+            ) : null}
+          </View>
+        </>
+      ) : null}
     </Screen>
   );
 }
 
-function SummaryCard({ title, summary }) {
+function SummaryCard({ title, summary, centerLabel }) {
   return (
     <Card>
       <Text style={s.cardTitle}>{title}</Text>
       <View style={s.summaryBody}>
-        <Donut
-          segments={summary.segments}
-          centerValue={String(summary.total)}
-          centerLabel={summary.label}
-        />
+        <Donut segments={summary.segments} centerValue={String(summary.total)} centerLabel={centerLabel} />
         <View style={{ flex: 1, gap: spacing.md }}>
           {summary.segments.map((seg) => (
             <View key={seg.id} style={s.legendRow}>
@@ -102,27 +186,16 @@ function SummaryCard({ title, summary }) {
 }
 
 const s = StyleSheet.create({
+  customRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.xl, marginTop: spacing.lg },
   dateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.sm,
     paddingHorizontal: spacing.xl,
     marginTop: spacing.lg,
     marginBottom: spacing.lg,
   },
-  inline: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   date: { ...type.body, color: colors.onSurface },
-  downloadBtn: {
-    height: 36,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.default,
-    borderColor: colors.brandPrimary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  downloadLabel: { ...type.bodySmall, color: colors.brandPrimary },
 
   tile: {
     width: 150,
@@ -135,7 +208,6 @@ const s = StyleSheet.create({
   },
   tileValue: { ...type.display, color: colors.onSurface },
   tileLabel: { ...type.bodySmall, color: colors.onSurfaceTertiary, marginTop: spacing.xs },
-  tileDelta: { ...type.caption, color: colors.brandPrimary, marginTop: spacing.sm },
 
   cardTitle: { ...type.heading, color: colors.onSurface },
   summaryBody: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.lg },
@@ -144,12 +216,6 @@ const s = StyleSheet.create({
   legendLabel: { ...type.bodySmall, color: colors.onSurfaceTertiary, flex: 1 },
   legendValue: { ...type.bodySmall, color: colors.onSurface },
   legendPct: { ...type.bodySmall, color: colors.muted },
-
-  tableHead: { flexDirection: 'row', marginTop: spacing.lg, marginBottom: spacing.sm },
-  tableHeadCell: { ...type.caption, color: colors.muted },
-  tableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md },
-  projectName: { ...type.bodySmall, color: colors.onSurface, letterSpacing: 2 },
-  projectVisits: { ...type.body, color: colors.onSurface },
 
   note: { ...type.caption, color: colors.muted, textAlign: 'center' },
 });

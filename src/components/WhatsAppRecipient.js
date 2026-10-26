@@ -1,31 +1,33 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Linking, Alert } from 'react-native';
-import { SelectField, TextField } from './ui';
+import { TextField } from './ui';
+import ReferencePicker from './ReferencePicker';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { useApp } from '../store';
+import { isMasked } from '../format';
+
+export const emptyRecipient = { person: null, useRegistered: true, otherNumber: '' };
 
 /**
  * Steps 1–3 of the WhatsApp flows in the 6 Oct review (#5 greetings, #6 documents):
  * select the user → their registered mobile is shown → keep it, or type another
  * WhatsApp number.
  *
- * `value`: { userId, useRegistered, otherNumber }; `onChange(patch)` merges.
+ * `value`: { person, useRegistered, otherNumber } where `person` is a row from
+ * GET /leads/references; `onChange(patch)` merges.
  */
 export default function WhatsAppRecipient({ value, onChange }) {
-  const { associates } = useApp();
-  const user = associates.find((a) => a.id === value.userId);
-  const label = (a) => `${a.name} • ${a.type}`;
+  const user = value.person;
+  const registered = user?.mobile && !isMasked(user.mobile) ? user.mobile : '';
 
   return (
     <View style={{ gap: spacing.md }}>
-      <SelectField
-        icon="user"
+      <ReferencePicker
+        pickerKey="whatsapp"
         label="Select User"
-        placeholder="Select CP / Freelancer / Influencer"
+        placeholder="Select CP / Broker / Influencer / Freelancer"
         sheetTitle="Select User"
-        value={user ? label(user) : ''}
-        options={associates.map((a) => ({ label: label(a), value: a.id }))}
-        onChange={(userId) => onChange({ userId, useRegistered: true, otherNumber: '' })}
+        value={user}
+        onChange={(person) => onChange({ person, useRegistered: true, otherNumber: '' })}
       />
 
       {user ? (
@@ -34,7 +36,7 @@ export default function WhatsAppRecipient({ value, onChange }) {
           <Option
             selected={value.useRegistered}
             title="Registered number"
-            subtitle={user.phone || 'No number on record'}
+            subtitle={registered || 'No number on record'}
             onPress={() => onChange({ useRegistered: true })}
           />
           <Option
@@ -74,9 +76,9 @@ function Option({ selected, title, subtitle, onPress }) {
 }
 
 /** The number the message goes to, as digits with country code, or '' if invalid. */
-export function recipientNumber(value, associates) {
-  const user = associates.find((a) => a.id === value.userId);
-  const raw = value.useRegistered ? user?.phone || '' : value.otherNumber || '';
+export function recipientNumber(value) {
+  const registered = value.person?.mobile && !isMasked(value.person.mobile) ? value.person.mobile : '';
+  const raw = value.useRegistered ? registered : value.otherNumber || '';
   let n = raw.replace(/\D/g, '');
   if (n.length === 10) n = `91${n}`; // Indian numbers entered without the country code
   return n.length >= 11 && n.length <= 15 ? n : '';

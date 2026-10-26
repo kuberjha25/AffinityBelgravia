@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Image, Pressable, StyleSheet, RefreshControl } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -8,7 +8,8 @@ import KeyboardActionBar, { ACTION_BAR_HEIGHT } from './KeyboardActionBar';
 import { RoundIconButton } from './ui';
 import { colors, spacing, type } from '../theme';
 import { images } from '../data';
-import { useApp } from '../store';
+import { useSelector } from 'react-redux';
+import { selectUnreadCount } from '../store/slices/notificationsSlice';
 
 /**
  * App bar — Figma component "App Bar" (State=Default / State=Notification).
@@ -16,7 +17,7 @@ import { useApp } from '../store';
  */
 export function AppBar({ showBack, onBack, right, style }) {
   const navigation = useNavigation();
-  const { unreadCount } = useApp();
+  const unreadCount = useSelector(selectUnreadCount);
   const back = onBack || (() => navigation.goBack());
 
   return (
@@ -75,6 +76,8 @@ export default function Screen({
   keyboardAction,
   edges = ['top'],
   backgroundColor = colors.surface,
+  refreshing = false,
+  onRefresh,
 }) {
   const insets = useSafeAreaInsets();
   const Body = scroll ? KeyboardAwareScrollView : View;
@@ -87,6 +90,14 @@ export default function Screen({
         ],
         keyboardShouldPersistTaps: 'handled',
         bottomOffset: keyboardAction ? ACTION_BAR_HEIGHT : KEYBOARD_GAP,
+        refreshControl: onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brandPrimary}
+            colors={[colors.brandPrimary]}
+          />
+        ) : undefined,
       }
     : { style: [{ flex: 1 }, contentContainerStyle] };
 

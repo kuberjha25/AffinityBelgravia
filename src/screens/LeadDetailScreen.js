@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Alert, Linking } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
 import DateField from '../components/DateField';
@@ -13,147 +14,183 @@ import {
   StatusPill,
   TextField,
   toneForStatus,
-  EmptyState,
+  LoadingState,
+  ErrorState,
 } from '../components/ui';
-import { displayAadhaar, displayMobile } from '../format';
+import { formatDate } from '../components/DateField';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { leadStatuses, leadTypes } from '../data';
-import { useApp } from '../store';
+import { leadTypes, leadUpdateStatuses } from '../data';
+import { fromApiDate, humanize, isMasked, orDash, rupees, toApiDate, todayApiDate } from '../format';
+import { usePermissions } from '../store';
+import { addFollowup, fetchLead, updateLead } from '../store/slices/leadsSlice';
 
 /**
  * Figma frames: `lead-detail-screen` (12:2135) and the
  * `lead-update-popup` overlay (12:2415).
- * CP / Freelancer / Influencer: view only (#2). Staff: edit, delete, update
- * status, add notes and schedule a visit (#3).
+ * CP / Broker / Influencer / Freelancer: view only (#2). Staff: edit, update
+ * status, add follow-up notes and schedule a visit (#3).
  */
 export default function LeadDetailScreen({ navigation, route }) {
-  const { leads, updateLead, deleteLead, can } = useApp();
-  const lead = leads.find((l) => l.id === route.params?.id);
+  const dispatch = useDispatch();
+  const id = route.params?.id;
+  const lead = useSelector((state) => state.leads.details[id]);
+  const status = useSelector((state) => state.leads.detailsStatus[id]);
+  const error = useSelector((state) => state.leads.detailsError[id]);
+  const { can } = usePermissions();
   const canEdit = can('lead.edit');
 
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({
-    type: lead?.type,
-    status: lead?.status,
-    followUpDate: lead?.followUpDate,
-    note: '',
-  });
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState({ type: '', status: '', followUpDate: '', note: '' });
+
+  useEffect(() => {
+    if (id) dispatch(fetchLead(id));
+  }, [dispatch, id]);
 
   if (!lead) {
     return (
       <Screen showBack>
         <PageTitle>Lead Detail</PageTitle>
-        <EmptyState icon="users" title="Lead not available" body="This lead was removed or is not assigned to you." />
+        {status === 'failed' ? (
+          <ErrorState message={error} onRetry={() => dispatch(fetchLead(id))} />
+        ) : (
+          <LoadingState />
+        )}
       </Screen>
     );
   }
 
-  const viaAssociate = Boolean(lead.associateId);
-
   const openUpdate = () => {
-    setDraft({ type: lead.type, status: lead.status, followUpDate: lead.followUpDate, note: '' });
+    setDraft({ type: lead.lead_type || '', status: lead.status || '', followUpDate: '', note: '' });
     setOpen(true);
   };
 
-  const confirmDelete = () =>
-    Alert.alert('Delete Lead', `Delete ${lead.name}? This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          navigation.goBack();
-          deleteLead(lead.id);
-        },
-      },
-    ]);
-
-  const save = () => {
-    updateLead(lead.id, {
-      type: draft.type,
-      status: draft.status,
-      followUpDate: draft.followUpDate,
-      ...(draft.note ? { note: draft.note } : null),
-    });
-    setDraft((d) => ({ ...d, note: '' }));
-    setOpen(false);
+  /**
+   * A note (with an optional follow-up date) is saved as a follow-up, which
+   * also carries the status / type change; without a note, the lead is updated.
+   */
+  const save = async () => {
+    if (draft.followUpDate && !draft.note.trim()) {
+      Alert.alert('Add a note', 'Please add a note for the follow-up.');
+      return;
+    }
+    // Only send what changed: statuses the backend sets itself (e.g. booked) are rejected on update.
+    const changes = {};
+    if (draft.status && draft.status !== lead.status) changes.status = draft.status;
+    if (draft.type && draft.type !== lead.lead_type) changes.lead_type = draft.type;
+    if (!draft.note.trim() && !Object.keys(changes).length) {
+      setOpen(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      if (draft.note.trim()) {
+        await dispatch(
+          addFollowup({
+            id: lead.id,
+            body: {
+              followup_date: toApiDate(draft.followUpDate) || todayApiDate(),
+              remarks: draft.note.trim(),
+              ...changes,
+            },
+          })
+        ).unwrap();
+      } else {
+        await dispatch(updateLead({ id: lead.id, body: changes })).unwrap();
+      }
+      setOpen(false);
+    } catch (message) {
+      Alert.alert('Could not save', String(message));
+    } finally {
+      setSaving(false);
+    }
   };
 
+  const nextFollowUp = /^\d{4}-\d{2}-\d{2}/.test(lead.next_follow_up || '') ? fromApiDate(lead.next_follow_up) : lead.next_follow_up;
+  const callable = lead.mobile && !isMasked(lead.mobile);
+  const mailable = lead.email && !isMasked(lead.email);
+  const history = lead.history || [];
+  const statusOptions = leadUpdateStatuses.map((v) => ({ label: humanize(v), value: v }));
+
   return (
-    <Screen showBack>
+    <Screen showBack refreshing={false} onRefresh={() => dispatch(fetchLead(id))}>
       <PageTitle>Lead Detail</PageTitle>
 
       <View style={{ paddingHorizontal: spacing.xl, gap: spacing.lg }}>
         <Card>
-          <Text style={s.name}>{lead.name}</Text>
+          <Text style={s.name}>{lead.full_name}</Text>
           <View style={s.pillRow}>
-            <StatusPill label={lead.status} tone={toneForStatus(lead.status)} />
-            <StatusPill label={lead.type} tone={lead.type === 'Hot' ? 'error' : 'warning'} />
-            <StatusPill label={lead.source} tone="neutral" />
+            <StatusPill label={humanize(lead.status)} tone={toneForStatus(lead.status)} />
+            {lead.lead_type ? (
+              <StatusPill label={humanize(lead.lead_type)} tone={lead.lead_type === 'hot' ? 'error' : 'warning'} />
+            ) : null}
+            {lead.source ? <StatusPill label={lead.source} tone="neutral" /> : null}
           </View>
           <Divider style={{ marginVertical: spacing.lg }} />
 
           <View style={{ gap: spacing.lg }}>
             <ContactRow
               icon="phone"
-              label={viaAssociate ? 'Mobile (last 4 digits)' : 'Phone'}
-              value={displayMobile(lead)}
+              label="Mobile"
+              value={orDash(lead.mobile)}
+              onPress={callable ? () => Linking.openURL(`tel:${lead.mobile}`) : undefined}
             />
-            {viaAssociate ? (
-              <ContactRow icon="file-text" label="Aadhaar (last 4 digits)" value={displayAadhaar(lead.aadhaarLast4)} />
+            {lead.email ? (
+              <ContactRow
+                icon="mail"
+                label="Email"
+                value={lead.email}
+                onPress={mailable ? () => Linking.openURL(`mailto:${lead.email}`) : undefined}
+              />
             ) : null}
-            {lead.email ? <ContactRow icon="mail" label="Email" value={lead.email} /> : null}
-            {viaAssociate ? <ContactRow icon="users" label="Brought by" value={lead.associateName} /> : null}
-            {lead.assignedTo ? <ContactRow icon="briefcase" label="Assigned Staff" value={lead.assignedTo} /> : null}
+            <ContactRow icon="briefcase" label="Assigned Staff" value={orDash(lead.assigned_to)} />
           </View>
         </Card>
 
         <Card>
           <Text style={s.cardTitle}>Interest Details</Text>
-          {Object.values(lead.interest || {}).some(Boolean) ? null : (
-            <Text style={s.interestEmpty}>
-              No interest details were captured for this lead. Add them while creating a lead.
-            </Text>
-          )}
           <View style={s.interestGrid}>
-            {Object.entries(lead.interest || {}).filter(([, value]) => value).map(([label, value]) => (
-              <View key={label} style={s.interestCell}>
-                <Text style={s.interestLabel}>{label}</Text>
-                <Text style={s.interestValue}>{value}</Text>
-              </View>
-            ))}
+            <Cell label="Project" value={orDash(lead.project_name)} />
+            <Cell label="Configuration" value={orDash(lead.unit_category)} />
+            <Cell label="Budget" value={rupees(lead.budget) || orDash(lead.budget)} />
+            <Cell label="Next Follow-up" value={orDash(nextFollowUp)} />
+            {lead.visit_date ? (
+              <Cell label="Site Visit" value={`${fromApiDate(lead.visit_date)}${lead.visit_time ? `, ${lead.visit_time}` : ''}`} />
+            ) : null}
           </View>
         </Card>
 
         <Card>
           <Text style={s.cardTitle}>History</Text>
           <View style={{ marginTop: spacing.lg }}>
-            {lead.history.map((h, i) => (
-              <View key={h.id} style={s.historyRow}>
+            {history.map((h, i) => (
+              <View key={`${h.date}-${i}`} style={s.historyRow}>
                 <View style={{ width: 86 }}>
-                  <Text style={s.histDate}>{h.date}</Text>
-                  <Text style={s.histTime}>{h.time}</Text>
+                  <Text style={s.histDate}>{fromApiDate(h.date)}</Text>
                 </View>
                 <View style={s.rail}>
                   <View style={s.dot} />
-                  {i < lead.history.length - 1 ? <View style={s.line} /> : null}
+                  {i < history.length - 1 ? <View style={s.line} /> : null}
                 </View>
                 <View style={{ flex: 1, paddingBottom: spacing.xl }}>
-                  <Text style={s.histTitle}>{h.title}</Text>
-                  <Text style={s.histDetail}>{h.detail}</Text>
-                  <View style={s.byRow}>
-                    <Icon name="user" size={12} color={colors.muted} />
-                    <Text style={s.histBy}>{h.by}</Text>
-                  </View>
+                  <Text style={s.histTitle}>{h.activity}</Text>
+                  {h.remarks ? <Text style={s.histDetail}>{h.remarks}</Text> : null}
+                  {h.user_name ? (
+                    <View style={s.byRow}>
+                      <Icon name="user" size={12} color={colors.muted} />
+                      <Text style={s.histBy}>{h.user_name}</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
             ))}
+            {history.length === 0 ? <Text style={s.histDetail}>No activity yet.</Text> : null}
           </View>
         </Card>
 
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={[s.cardTitle, { flex: 1 }]}>Notes</Text>
+            <Text style={[s.cardTitle, { flex: 1 }]}>Remarks</Text>
             {canEdit ? (
               <Pressable onPress={openUpdate} hitSlop={8}>
                 <Text style={s.addNote}>Add Note</Text>
@@ -161,7 +198,7 @@ export default function LeadDetailScreen({ navigation, route }) {
             ) : null}
           </View>
           <View style={s.noteBox}>
-            <Text style={s.noteText}>{lead.note}</Text>
+            <Text style={s.noteText}>{lead.remarks || 'No remarks added yet.'}</Text>
           </View>
         </Card>
 
@@ -175,28 +212,10 @@ export default function LeadDetailScreen({ navigation, route }) {
               />
               <SecondaryButton label="Update Status" onPress={openUpdate} style={{ flex: 1 }} />
             </View>
-            <View style={{ flexDirection: 'row', gap: spacing.md }}>
-              <SecondaryButton
-                label="Edit Lead"
-                icon="edit"
-                onPress={() => navigation.navigate('NewLead', { id: lead.id })}
-                style={{ flex: 1 }}
-              />
-              {can('lead.delete') ? (
-                <SecondaryButton
-                  label="Delete"
-                  icon="x"
-                  onPress={confirmDelete}
-                  style={{ flex: 1, borderColor: colors.error }}
-                  labelStyle={{ color: colors.error }}
-                />
-              ) : null}
-            </View>
+            <SecondaryButton label="Edit Lead" icon="edit" onPress={() => navigation.navigate('NewLead', { id: lead.id })} />
           </>
         ) : (
-          <Text style={s.viewOnly}>
-            View only. Contact the Affinity Belgravia sales team to update this lead.
-          </Text>
+          <Text style={s.viewOnly}>View only. Contact the Affinity Belgravia sales team to update this lead.</Text>
         )}
       </View>
 
@@ -221,13 +240,15 @@ export default function LeadDetailScreen({ navigation, route }) {
 
         <SelectField
           label="Lead Status"
-          value={draft.status}
-          options={leadStatuses}
+          value={draft.status ? humanize(draft.status) : ''}
+          placeholder="Select status"
+          options={statusOptions}
           onChange={(v) => setDraft((d) => ({ ...d, status: v }))}
         />
 
         <DateField
           label="Follow-up Date"
+          placeholder={`Today (${formatDate(new Date())})`}
           value={draft.followUpDate}
           onChange={(v) => setDraft((d) => ({ ...d, followUpDate: v }))}
         />
@@ -238,24 +259,34 @@ export default function LeadDetailScreen({ navigation, route }) {
           value={draft.note}
           onChangeText={(v) => setDraft((d) => ({ ...d, note: v }))}
           multiline
+          maxLength={500}
         />
 
-        <PrimaryButton label="Save Update" onPress={save} />
+        <PrimaryButton label="Save Update" onPress={save} loading={saving} />
       </CenterDialog>
     </Screen>
   );
 }
 
-function ContactRow({ icon, label, value }) {
+function ContactRow({ icon, label, value, onPress }) {
   return (
-    <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'center' }}>
+    <Pressable onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'center' }}>
       <View style={s.contactIcon}>
         <Icon name={icon} size={18} color={colors.brandPrimary} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={s.contactLabel}>{label}</Text>
-        <Text style={s.contactValue}>{value}</Text>
+        <Text style={[s.contactValue, onPress && { color: colors.brandPrimary }]}>{value}</Text>
       </View>
+    </Pressable>
+  );
+}
+
+function Cell({ label, value }) {
+  return (
+    <View style={s.interestCell}>
+      <Text style={s.interestLabel}>{label}</Text>
+      <Text style={s.interestValue}>{value}</Text>
     </View>
   );
 }
@@ -280,11 +311,9 @@ const s = StyleSheet.create({
   interestCell: { width: '50%', paddingBottom: spacing.lg, paddingRight: spacing.md },
   interestLabel: { ...type.caption, color: colors.brandPrimary },
   interestValue: { ...type.body, color: colors.onSurface, marginTop: 2 },
-  interestEmpty: { ...type.bodySmall, color: colors.muted, marginTop: spacing.md },
 
   historyRow: { flexDirection: 'row', gap: spacing.md },
   histDate: { ...type.caption, color: colors.brandPrimary },
-  histTime: { ...type.caption, color: colors.onSurfaceTertiary, letterSpacing: 1, marginTop: 2 },
   rail: { width: 10, alignItems: 'center', paddingTop: 4 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brandPrimary },
   line: { flex: 1, width: 1, backgroundColor: colors.border, marginTop: 4 },

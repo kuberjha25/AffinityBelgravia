@@ -1,27 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
-import DateField from '../components/DateField';
 import { TextField, SelectField, StateCityFields, PrimaryButton } from '../components/ui';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { leadCategories, leadInterestOptions, leadTypes, visitTimeSlots } from '../data';
+import { leadTypes } from '../data';
+import { digits, isMasked } from '../format';
 import LeadSourceFields, { validateLeadSource } from '../components/LeadSourceFields';
-import { useApp } from '../store';
+import { createLead, updateLead } from '../store/slices/leadsSlice';
+import { fetchProjects } from '../store/slices/projectsSlice';
+import { useLookup } from '../hooks';
 
-const INTEREST_ICONS = {
-  Project: 'building',
-  Configuration: 'layers',
-  'Budget Range': 'hash',
-  'Preferred Floor': 'building-2',
-  Possession: 'calendar',
-  Financing: 'briefcase',
-};
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const TYPE_TONE = {
-  Hot: { fg: colors.error, bg: 'rgba(180,83,74,0.06)' },
-  Warm: { fg: colors.error, bg: 'rgba(180,83,74,0.06)' },
-  Cold: { fg: colors.muted, bg: colors.surfaceSecondary },
+  hot: { fg: colors.error, bg: 'rgba(180,83,74,0.06)' },
+  warm: { fg: colors.brandPrimary, bg: colors.glassTint },
+  cold: { fg: colors.muted, bg: colors.surfaceSecondary },
 };
 
 /**
@@ -29,135 +25,191 @@ const TYPE_TONE = {
  * Staff only (#3). With `route.params.id` it edits that lead instead.
  */
 export default function NewLeadScreen({ navigation, route }) {
-  const { addLead, editLead, allLeads } = useApp();
-  const editing = route?.params?.id ? allLeads.find((l) => l.id === route.params.id) : null;
+  const dispatch = useDispatch();
+  const editId = route?.params?.id;
+  const editing = useSelector((state) => (editId ? state.leads.details[editId] : null));
+  const projects = useSelector((state) => state.projects.list);
+  const categories = useLookup('categories');
+  const [saving, setSaving] = useState(false);
+
   const [form, setForm] = useState(() => ({
-    name: editing?.name || '',
-    email: editing?.email || '',
-    phone: editing?.phone || '',
+    fullName: editing?.full_name || '',
+    email: editing?.email && !isMasked(editing.email) ? editing.email : '',
+    mobile: editing?.mobile && !isMasked(editing.mobile) ? digits(editing.mobile, 10) : '',
     source: editing?.source || '',
-    associateId: editing?.associateId || null,
-    mobileLast4: editing?.mobileLast4 || '',
-    aadhaarLast4: editing?.aadhaarLast4 || '',
-    category: editing?.category || '',
-    address: editing?.address || '',
-    city: editing?.city || '',
-    state: editing?.state || '',
-    type: editing?.type || 'Warm',
-    visitDate: editing?.visitDate || '',
-    visitTime: editing?.visitTime || '',
+    partner: null,
+    categoryId: null,
+    projectId: null,
+    budget: editing?.budget ? String(editing.budget) : '',
+    address: '',
+    city: '',
+    state: '',
+    type: editing?.lead_type || 'warm',
     remarks: editing?.remarks || '',
-    interest: { ...(editing?.interest || {}) },
   }));
   const patch = (p) => setForm((f) => ({ ...f, ...p }));
+  const set = (key) => (value) => patch({ [key]: value });
 
-  const setInterest = (key) => (value) =>
-    setForm((f) => ({ ...f, interest: { ...f.interest, [key]: value } }));
+  useEffect(() => {
+    if (projects.status === 'idle') dispatch(fetchProjects({ page: 1 }));
+  }, [dispatch, projects.status]);
 
-  const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
+  // The lead detail gives names; the form sends ids.
+  useEffect(() => {
+    if (!editing) return;
+    setForm((f) => ({
+      ...f,
+      categoryId: f.categoryId ?? (categories.items || []).find((c) => c.name === editing.unit_category)?.id ?? null,
+      projectId: f.projectId ?? projects.items.find((p) => p.name === editing.project_name)?.id ?? null,
+    }));
+  }, [editing, categories.items, projects.items]);
 
-  const submit = () => {
-    if (!form.name.trim()) {
+  const categoryOptions = useMemo(() => (categories.items || []).map((c) => ({ label: c.name, value: c.id })), [categories.items]);
+  const projectOptions = useMemo(() => projects.items.map((p) => ({ label: p.name, value: p.id })), [projects.items]);
+  const categoryLabel = categoryOptions.find((o) => o.value === form.categoryId)?.label || '';
+  const projectLabel = projectOptions.find((o) => o.value === form.projectId)?.label || '';
+
+  const submit = async () => {
+    if (!form.fullName.trim()) {
       Alert.alert('Name required', 'Please enter the lead name.');
       return;
     }
-    const error = validateLeadSource(form);
+    const error = validateLeadSource(form, { optionalMobile: Boolean(editing) });
     if (error) {
       Alert.alert('Check details', error);
       return;
     }
-    if (editing) {
-      editLead(editing.id, form);
-      Alert.alert('Lead updated', `${form.name}'s details have been saved.`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+    if (form.email && !EMAIL.test(form.email.trim())) {
+      Alert.alert('Email address', 'Please enter a valid email address.');
       return;
     }
-    const record = addLead(form);
-    Alert.alert('Lead submitted', `${record.name} has been added to your leads.`, [
-      { text: 'OK', onPress: () => navigation.goBack() },
-    ]);
+
+    const body = {
+      full_name: form.fullName.trim(),
+      mobile: form.mobile || undefined,
+      email: form.email.trim() || undefined,
+      lead_type: form.type,
+      source: form.source || undefined,
+      unit_category: form.categoryId || undefined,
+      budget: form.budget ? Number(form.budget) : undefined,
+      project_id: form.projectId || undefined,
+      address: form.address.trim() || undefined,
+      state: form.state || undefined,
+      city: form.city || undefined,
+      remarks: form.remarks.trim() || undefined,
+    };
+
+    setSaving(true);
+    try {
+      if (editing) {
+        await dispatch(updateLead({ id: editing.id, body })).unwrap();
+        Alert.alert('Lead updated', `${body.full_name}'s details have been saved.`, [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      } else {
+        const created = await dispatch(createLead({ ...body, partner_id: form.partner?.id })).unwrap();
+        Alert.alert('Lead submitted', `${body.full_name} has been added to your leads.`, [
+          {
+            text: 'OK',
+            onPress: () =>
+              created?.id ? navigation.replace('LeadDetail', { id: created.id }) : navigation.goBack(),
+          },
+        ]);
+      }
+    } catch (message) {
+      Alert.alert('Could not save', String(message));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const submitLabel = editing ? 'Save Changes' : 'Submit Lead';
 
   return (
-    <Screen showBack keyboardAction={<PrimaryButton label={submitLabel} onPress={submit} />}>
-      <>
-        <PageTitle>{editing ? 'Edit Lead' : 'New Lead'}</PageTitle>
+    <Screen showBack keyboardAction={<PrimaryButton label={submitLabel} onPress={submit} loading={saving} />}>
+      <PageTitle>{editing ? 'Edit Lead' : 'New Lead'}</PageTitle>
 
-        <View style={{ paddingHorizontal: spacing.xl }}>
-          <Text style={s.group}>Details</Text>
-          <View style={{ gap: spacing.md }}>
-            <TextField icon="user" placeholder="Full Name" value={form.name} onChangeText={set('name')} />
-            <TextField icon="mail" placeholder="Email Address" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" />
-            <LeadSourceFields form={form} onChange={patch} />
-            <SelectField icon="grid" placeholder="Customer Category" value={form.category} options={leadCategories} onChange={set('category')} />
-          </View>
-
-          <Text style={s.group}>Address</Text>
-          <View style={{ gap: spacing.md }}>
-            <TextField icon="map-pin" placeholder="Address" value={form.address} onChangeText={set('address')} />
-            <StateCityFields
-              row
-              state={form.state}
-              city={form.city}
-              onChange={({ state, city }) => setForm((f) => ({ ...f, state, city }))}
-            />
-          </View>
-
-          <Text style={s.group}>Interest Details (optional)</Text>
-          <View style={{ gap: spacing.md }}>
-            {Object.entries(leadInterestOptions).map(([key, options]) => (
-              <SelectField
-                key={key}
-                icon={INTEREST_ICONS[key]}
-                placeholder={key}
-                value={form.interest[key]}
-                options={options}
-                onChange={setInterest(key)}
-              />
-            ))}
-          </View>
-
-          <Text style={s.group}>Lead Type</Text>
-          <View style={{ flexDirection: 'row', gap: spacing.md }}>
-            {leadTypes.map((t) => {
-              const active = form.type === t.id;
-              const tone = TYPE_TONE[t.id];
-              return (
-                <Pressable
-                  key={t.id}
-                  onPress={() => set('type')(t.id)}
-                  style={[s.typeChip, { backgroundColor: active ? tone.bg : colors.surfaceSecondary }, active && { borderColor: tone.fg }]}
-                >
-                  <Icon name={t.icon} size={16} color={active ? tone.fg : colors.muted} />
-                  <Text style={[s.typeLabel, active && { color: tone.fg }]}>{t.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Text style={s.group}>Schedule</Text>
-          <View style={{ gap: spacing.md }}>
-            <DateField placeholder="Visit Date" value={form.visitDate} onChange={set('visitDate')} />
-            <SelectField icon="clock" placeholder="Visit Time (2 hrs slots)" value={form.visitTime} options={visitTimeSlots} onChange={set('visitTime')} />
-          </View>
-
-          <Text style={s.group}>Remarks</Text>
-          <TextField
-            icon="edit"
-            placeholder="Enter remarks (optional)"
-            value={form.remarks}
-            onChangeText={set('remarks')}
-            multiline
-            maxLength={500}
-            showCounter
+      <View style={{ paddingHorizontal: spacing.xl }}>
+        <Text style={s.group}>Details</Text>
+        <View style={{ gap: spacing.md }}>
+          <TextField icon="user" placeholder="Full Name" value={form.fullName} onChangeText={set('fullName')} maxLength={200} />
+          <TextField icon="mail" placeholder="Email Address" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" />
+          <LeadSourceFields
+            form={form}
+            onChange={patch}
+            showReferrer={!editing}
+            mobilePlaceholder={editing ? 'Mobile (leave blank to keep current)' : undefined}
           />
-
-          <PrimaryButton label={submitLabel} onPress={submit} style={{ marginTop: spacing.lg }} />
         </View>
-      </>
+
+        <Text style={s.group}>Address</Text>
+        <View style={{ gap: spacing.md }}>
+          <TextField icon="map-pin" placeholder="Address" value={form.address} onChangeText={set('address')} />
+          <StateCityFields
+            row
+            state={form.state}
+            city={form.city}
+            onChange={({ state, city }) => patch({ state, city })}
+          />
+        </View>
+
+        <Text style={s.group}>Interest Details (optional)</Text>
+        <View style={{ gap: spacing.md }}>
+          <SelectField
+            icon="building"
+            placeholder={projects.status === 'loading' ? 'Loading projects…' : 'Project'}
+            value={projectLabel}
+            options={projectOptions}
+            onChange={set('projectId')}
+          />
+          <SelectField
+            icon="layers"
+            placeholder={categories.status === 'loading' ? 'Loading configurations…' : 'Configuration'}
+            sheetTitle="Configuration"
+            value={categoryLabel}
+            options={categoryOptions}
+            onChange={set('categoryId')}
+          />
+          <TextField
+            icon="hash"
+            placeholder="Budget (₹)"
+            value={form.budget}
+            onChangeText={(v) => set('budget')(digits(v, 12))}
+            keyboardType="number-pad"
+          />
+        </View>
+
+        <Text style={s.group}>Lead Type</Text>
+        <View style={{ flexDirection: 'row', gap: spacing.md }}>
+          {leadTypes.map((t) => {
+            const active = form.type === t.id;
+            const tone = TYPE_TONE[t.id];
+            return (
+              <Pressable
+                key={t.id}
+                onPress={() => set('type')(t.id)}
+                style={[s.typeChip, { backgroundColor: active ? tone.bg : colors.surfaceSecondary }, active && { borderColor: tone.fg }]}
+              >
+                <Icon name={t.icon} size={16} color={active ? tone.fg : colors.muted} />
+                <Text style={[s.typeLabel, active && { color: tone.fg }]}>{t.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={s.group}>Remarks</Text>
+        <TextField
+          icon="edit"
+          placeholder="Enter remarks (optional)"
+          value={form.remarks}
+          onChangeText={set('remarks')}
+          multiline
+          maxLength={500}
+          showCounter
+        />
+
+        <PrimaryButton label={submitLabel} onPress={submit} loading={saving} style={{ marginTop: spacing.lg }} />
+      </View>
     </Screen>
   );
 }

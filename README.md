@@ -5,9 +5,11 @@ Figma file **Affinity New** (`H3vwojcWTcXMIgmPhhnQe6`). Every screen on the
 `02 Screens` page is implemented, the design tokens come from `00 Foundations`,
 and the shared components mirror `01 Components`.
 
-There is no backend. All content lives in `src/data.js`; anything the user
-creates or edits during a session is held in `src/store.js`, so every flow
-completes end to end.
+All data comes from the Affinity Belgravia backend (Laravel + Sanctum) at
+`https://affinitybelgravia.in/api` — the same API as the Meraqui app, on a
+different base URL. State lives in a Redux Toolkit store; every API call is an
+async thunk (redux-thunk). Login is mobile + OTP; the Sanctum token is kept in
+the device's secure storage.
 
 ## Running it
 
@@ -37,8 +39,21 @@ assets/
 
 src/
   theme.js      colours, type ramp, spacing, radii, shadows — 1:1 with Figma variables
-  data.js       all dummy content (user, leads, visits, projects, inventory, news, …)
-  store.js      in-memory app state; stands in for the API
+  data.js       static content only: images, enum labels, Terms / About copy
+  format.js     date (display ↔ YYYY-MM-DD), label and image-URL helpers
+  hooks.js      debounced search, master-list loader, refetch-when-stale
+  permissions.js  staff (`backoffice`) vs partner (`frontend`) permissions
+  api/
+    client.js   fetch wrapper: base URL, Accept/Bearer headers, error envelope, 401
+    index.js    one function per endpoint
+    storage.js  token in SecureStore (localStorage on web)
+  store/
+    index.js    configureStore, session-expiry handling, usePermissions()
+    helpers.js  paginated list / detail reducers, apiThunk
+    slices/     auth, onboarding, leads, visits, registrations, projects
+                (incl. inventory), content (news, promotions, documents),
+                notifications, lookups (categories, sources, time slots,
+                CP documents, people picker), dashboard (Home + MIS counts)
   components/
     icons.js        59 icons exported from Figma as path data
     iconPatches.js  restores two icons Figma's SVG export flattened

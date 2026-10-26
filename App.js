@@ -8,8 +8,10 @@ import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { Provider } from 'react-redux';
 import RootNavigator from './src/navigation/RootNavigator';
-import { AppProvider } from './src/store';
+import { navigationRef } from './src/navigation/navigationRef';
+import { store } from './src/store';
 import { colors } from './src/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -101,12 +103,12 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayout}>
       <KeyboardProvider>
       <SafeAreaProvider>
-        <AppProvider>
+        <Provider store={store}>
           <StatusBar style="dark" />
-          <NavigationContainer theme={navTheme} linking={linking}>
+          <NavigationContainer ref={navigationRef} theme={navTheme} linking={linking}>
             <RootNavigator />
           </NavigationContainer>
-        </AppProvider>
+        </Provider>
       </SafeAreaProvider>
       </KeyboardProvider>
     </GestureHandlerRootView>

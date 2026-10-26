@@ -6,7 +6,9 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
+  Alert,
 } from 'react-native';
+import { useDispatch } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import Icon from '../components/Icon';
@@ -14,17 +16,26 @@ import { PrimaryButton } from '../components/ui';
 import KeyboardDockedSheet from '../components/KeyboardDockedSheet';
 import { colors, radius, spacing, type, borderWidth, shadow } from '../theme';
 import { auth, brand, images, socialLinks } from '../data';
-import { useApp } from '../store';
+import { sendOtp } from '../store/slices/authSlice';
 
-/** Figma frame: `login-register` (12:25). */
+/** Figma frame: `login-register` (12:25). Sends the login OTP. */
 export default function LoginScreen({ navigation }) {
-  const { patchOnboarding } = useApp();
+  const dispatch = useDispatch();
   const [mobile, setMobile] = useState('');
-  const valid = mobile.replace(/\D/g, '').length === 10;
+  const [sending, setSending] = useState(false);
+  const number = mobile.replace(/\D/g, '');
+  const valid = number.length === 10;
 
-  const onContinue = () => {
-    patchOnboarding({ mobile });
-    navigation.navigate('Otp', { mobile });
+  const onContinue = async () => {
+    setSending(true);
+    try {
+      await dispatch(sendOtp(number)).unwrap();
+      navigation.navigate('Otp', { mobile: number });
+    } catch (message) {
+      Alert.alert('Could not send OTP', String(message));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -64,7 +75,7 @@ export default function LoginScreen({ navigation }) {
           </View>
 
           <View onLayout={onAnchorLayout} style={{ marginTop: spacing.xl }}>
-            <PrimaryButton label="Continue" onPress={onContinue} disabled={!valid} />
+            <PrimaryButton label="Continue" onPress={onContinue} disabled={!valid} loading={sending} />
           </View>
 
           <Text style={s.legal}>

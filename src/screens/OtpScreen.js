@@ -6,7 +6,9 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
+  Alert,
 } from 'react-native';
+import { useDispatch } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { PrimaryButton } from '../components/ui';
@@ -15,13 +17,47 @@ import KeyboardDockedSheet from '../components/KeyboardDockedSheet';
 import { BrandCard, SocialRow } from './LoginScreen';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
 import { auth, images } from '../data';
+import { sendOtp, verifyOtp } from '../store/slices/authSlice';
+import { startOnboarding } from '../store/slices/onboardingSlice';
 
-/** Figma frame: `otp-verification` (12:73). */
+/**
+ * Figma frame: `otp-verification` (12:73).
+ * An existing user is signed in; a new number continues to self-registration.
+ */
 export default function OtpScreen({ navigation, route }) {
-  const mobile = route?.params?.mobile || auth.demoMobile;
+  const dispatch = useDispatch();
+  const mobile = route?.params?.mobile || '';
   const [code, setCode] = useState(() => Array(auth.otpLength).fill(''));
   const [seconds, setSeconds] = useState(30);
+  const [verifying, setVerifying] = useState(false);
   const refs = useRef([]);
+
+  const onVerify = async () => {
+    setVerifying(true);
+    try {
+      const result = await dispatch(verifyOtp({ mobile, otp: code.join('') })).unwrap();
+      if (result.isNewUser) {
+        dispatch(startOnboarding({ mode: 'self', mobile }));
+        navigation.navigate('CompleteProfile');
+      } else {
+        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      }
+    } catch (message) {
+      Alert.alert('Verification failed', String(message));
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const onResend = async () => {
+    setSeconds(30);
+    try {
+      await dispatch(sendOtp(mobile)).unwrap();
+    } catch (message) {
+      setSeconds(0);
+      Alert.alert('Could not resend OTP', String(message));
+    }
+  };
 
   useEffect(() => {
     if (seconds <= 0) return undefined;
@@ -100,12 +136,12 @@ export default function OtpScreen({ navigation, route }) {
           </View>
 
           <View onLayout={onAnchorLayout} style={{ marginTop: spacing.xl }}>
-            <PrimaryButton label="Verify" disabled={!filled} onPress={() => navigation.navigate('CompleteProfile')} />
+            <PrimaryButton label="Verify" disabled={!filled} loading={verifying} onPress={onVerify} />
           </View>
 
           <View style={s.resendRow}>
             <Text style={s.resendText}>Didn&apos;t receive the code? </Text>
-            <Pressable disabled={seconds > 0} onPress={() => setSeconds(30)} hitSlop={8}>
+            <Pressable disabled={seconds > 0} onPress={onResend} hitSlop={8}>
               <Text style={[s.resendLink, seconds > 0 && { color: colors.muted }]}>
                 {seconds > 0 ? `Resend in ${seconds}s` : 'Resend OTP'}
               </Text>

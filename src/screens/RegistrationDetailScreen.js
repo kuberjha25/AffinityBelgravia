@@ -1,50 +1,73 @@
-import React from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import Screen, { PageTitle } from '../components/Screen';
-import {
-  Avatar,
-  Card,
-  Divider,
-  KeyValue,
-  PrimaryButton,
-  StatusPill,
-} from '../components/ui';
-import { colors, spacing, type } from '../theme';
-import { useApp } from '../store';
+import Icon from '../components/Icon';
+import { Avatar, Card, Divider, KeyValue, StatusPill, LoadingState, ErrorState, toneForStatus } from '../components/ui';
+import { colors, radius, spacing, type, borderWidth } from '../theme';
+import { orDash } from '../format';
+import { fetchRegistration } from '../store/slices/registrationsSlice';
 
-const PERSONAL_ICONS = {
-  Phone: 'phone',
-  Email: 'mail',
-  Address: 'map-pin',
-  City: 'building',
-  State: 'map',
-  Pincode: 'hash',
-  'Date of Birth': 'calendar',
-  Anniversary: 'heart',
-};
+const PERSONAL = [
+  ['mobile_number', 'Mobile', 'phone'],
+  ['email_address', 'Email', 'mail'],
+  ['address', 'Address', 'map-pin'],
+  ['city', 'City', 'building'],
+  ['state', 'State', 'map'],
+  ['date_of_birth', 'Date of Birth', 'calendar'],
+  ['anniversary_date', 'Anniversary', 'heart'],
+];
 
-const PROFESSIONAL_ICONS = {
-  Company: 'briefcase',
-  'RERA Number': 'file-text',
-  'Registration Date': 'calendar',
-  Status: 'shield',
-};
+const BUSINESS = [
+  ['company_name', 'Company', 'briefcase'],
+  ['business_type', 'Business Type', 'building-2'],
+  ['gst_number', 'GST Number', 'file-text'],
+  ['pan_number', 'PAN Number', 'file-text'],
+  ['rera_number', 'RERA Number', 'file-text'],
+  ['msme_number', 'MSME Number', 'file-text'],
+];
 
 /** Figma frame: `user-detail-screen` (12:698). */
 export default function RegistrationDetailScreen({ route }) {
-  const { registrations } = useApp();
-  const record = registrations.find((r) => r.id === route.params?.id) || registrations[0];
+  const dispatch = useDispatch();
+  const id = route.params?.id;
+  const record = useSelector((state) => state.registrations.details[id]);
+  const status = useSelector((state) => state.registrations.detailsStatus[id]);
+  const error = useSelector((state) => state.registrations.detailsError[id]);
+
+  useEffect(() => {
+    if (id) dispatch(fetchRegistration(id));
+  }, [dispatch, id]);
+
+  if (!record) {
+    return (
+      <Screen showBack>
+        <PageTitle>Registration Details</PageTitle>
+        {status === 'failed' ? <ErrorState message={error} onRetry={() => dispatch(fetchRegistration(id))} /> : <LoadingState />}
+      </Screen>
+    );
+  }
+
+  const header = record.header || {};
+  const personal = record.personal_information || {};
+  const business = record.business_information;
+  const documents = record.documents_submitted || [];
+  const hasBusiness = business && BUSINESS.some(([key]) => orDash(business[key]) !== '—');
 
   return (
-    <Screen showBack>
+    <Screen showBack onRefresh={() => dispatch(fetchRegistration(id))}>
       <PageTitle>Registration Details</PageTitle>
 
       <View style={{ paddingHorizontal: spacing.xl, gap: spacing.lg }}>
         <Card style={s.headCard}>
-          <Avatar source={record.avatar} name={record.name} size={56} />
+          <Avatar name={personal.full_name || ''} size={56} />
           <View style={{ flex: 1 }}>
-            <Text style={s.name}>{record.name}</Text>
-            <StatusPill label={record.type} tone="warning" style={{ marginTop: spacing.xs }} />
+            <Text style={s.name}>{orDash(personal.full_name)}</Text>
+            <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.xs }}>
+              {header.category ? <StatusPill label={header.category} tone="warning" /> : null}
+              {header.status ? <StatusPill label={header.status} tone={toneForStatus(header.status)} /> : null}
+            </View>
+            {header.submitted_on ? <Text style={s.submitted}>{`Submitted ${header.submitted_on}`}</Text> : null}
           </View>
         </Card>
 
@@ -52,35 +75,50 @@ export default function RegistrationDetailScreen({ route }) {
           <Text style={s.cardTitle}>Personal Information</Text>
           <Divider style={{ marginVertical: spacing.md }} />
           <View style={{ gap: spacing.lg }}>
-            {Object.entries(record.personal).map(([label, value]) => (
-              <KeyValue key={label} label={label} value={value} icon={PERSONAL_ICONS[label]} compact />
+            {PERSONAL.map(([key, label, icon]) => (
+              <KeyValue key={key} label={label} value={orDash(personal[key])} icon={icon} compact />
             ))}
           </View>
         </Card>
 
-        <Card>
-          <Text style={s.cardTitle}>Professional Details</Text>
-          <Divider style={{ marginVertical: spacing.md }} />
-          <View style={{ gap: spacing.lg }}>
-            {Object.entries(record.professional).map(([label, value]) =>
-              label === 'Status' ? (
-                <View key={label} style={{ flexDirection: 'row', gap: spacing.md }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.statusLabel}>{label}</Text>
-                    <StatusPill label={value} tone="success" style={{ marginTop: spacing.xs }} />
-                  </View>
-                </View>
-              ) : (
-                <KeyValue key={label} label={label} value={value} icon={PROFESSIONAL_ICONS[label]} compact />
-              )
-            )}
-          </View>
-        </Card>
+        {hasBusiness ? (
+          <Card>
+            <Text style={s.cardTitle}>Business Information</Text>
+            <Divider style={{ marginVertical: spacing.md }} />
+            <View style={{ gap: spacing.lg }}>
+              {BUSINESS.map(([key, label, icon]) => (
+                <KeyValue key={key} label={label} value={orDash(business[key])} icon={icon} compact />
+              ))}
+            </View>
+          </Card>
+        ) : null}
 
-        <PrimaryButton
-          label="Edit Profile"
-          onPress={() => Alert.alert('Edit Profile', `Editing ${record.name}'s registration.`)}
-        />
+        {documents.length ? (
+          <Card>
+            <Text style={s.cardTitle}>Documents Submitted</Text>
+            <Divider style={{ marginVertical: spacing.md }} />
+            <View style={{ gap: spacing.md }}>
+              {documents.map((doc) => (
+                <Pressable
+                  key={doc.id}
+                  style={s.docRow}
+                  disabled={!doc.file_url}
+                  onPress={() => Linking.openURL(doc.file_url)}
+                >
+                  <View style={s.docIcon}>
+                    <Icon name="file-text" size={18} color={colors.brandPrimary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.docTitle}>{doc.name}</Text>
+                    {doc.original_name ? <Text style={s.docMeta} numberOfLines={1}>{doc.original_name}</Text> : null}
+                  </View>
+                  {doc.status ? <StatusPill label={doc.status} tone={toneForStatus(doc.status)} /> : null}
+                  {doc.file_url ? <Icon name="download" size={16} color={colors.brandPrimary} /> : null}
+                </Pressable>
+              ))}
+            </View>
+          </Card>
+        ) : null}
       </View>
     </Screen>
   );
@@ -89,6 +127,25 @@ export default function RegistrationDetailScreen({ route }) {
 const s = StyleSheet.create({
   headCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   name: { ...type.heading, color: colors.onSurface },
+  submitted: { ...type.caption, color: colors.muted, marginTop: spacing.xs },
   cardTitle: { ...type.heading, color: colors.onSurface },
-  statusLabel: { ...type.caption, color: colors.muted, marginLeft: 28 },
+  docRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.default,
+    borderColor: colors.border,
+  },
+  docIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.glassTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  docTitle: { ...type.bodySmall, color: colors.onSurface },
+  docMeta: { ...type.caption, color: colors.muted, marginTop: 2 },
 });

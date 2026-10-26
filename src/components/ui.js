@@ -14,6 +14,7 @@ import {
   Image,
   Modal,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -23,22 +24,29 @@ import { images, states, citiesByState } from '../data';
 
 /* ------------------------------------------------------------- Button */
 
-export function PrimaryButton({ label, icon, iconRight, onPress, disabled, style, compact }) {
+export function PrimaryButton({ label, icon, iconRight, onPress, disabled, loading, style, compact }) {
+  const off = disabled || loading;
   return (
     <Pressable
-      onPress={disabled ? undefined : onPress}
-      disabled={disabled}
+      onPress={off ? undefined : onPress}
+      disabled={off}
       style={({ pressed }) => [
         s.btnPrimary,
         compact && { height: 48 },
-        pressed && !disabled && s.btnPrimaryPressed,
-        disabled && s.btnDisabled,
+        pressed && !off && s.btnPrimaryPressed,
+        disabled && !loading && s.btnDisabled,
         style,
       ]}
     >
-      {icon ? <Icon name={icon} size={16} color={colors.onSurfaceInverse} /> : null}
-      <Text style={[s.btnPrimaryLabel, disabled && s.btnDisabledLabel]}>{label}</Text>
-      {iconRight ? <Icon name={iconRight} size={16} color={disabled ? colors.muted : colors.onSurfaceInverse} /> : null}
+      {loading ? (
+        <ActivityIndicator color={colors.onSurfaceInverse} />
+      ) : (
+        <>
+          {icon ? <Icon name={icon} size={16} color={colors.onSurfaceInverse} /> : null}
+          <Text style={[s.btnPrimaryLabel, disabled && s.btnDisabledLabel]}>{label}</Text>
+          {iconRight ? <Icon name={iconRight} size={16} color={disabled ? colors.muted : colors.onSurfaceInverse} /> : null}
+        </>
+      )}
     </Pressable>
   );
 }
@@ -408,10 +416,10 @@ const PILL_TONES = {
 };
 
 export const toneForStatus = (status = '') => {
-  const v = String(status).toLowerCase();
-  if (['confirmed', 'completed', 'available', 'converted', 'attended', 'active', 'success'].includes(v)) return 'success';
-  if (['cancelled', 'sold', 'not interested', 'error', 'rejected'].includes(v)) return 'error';
-  if (['pending', 'booked', 'in progress', 'upcoming', 'not matured'].includes(v)) return 'warning';
+  const v = String(status || '').toLowerCase().replace(/[_-]+/g, ' ').trim();
+  if (['confirmed', 'completed', 'available', 'converted', 'attended', 'active', 'success', 'approved', 'booked', 'visit completed', 'verified'].includes(v)) return 'success';
+  if (['cancelled', 'sold', 'not interested', 'error', 'rejected', 'closed', 'expired', 'blocked'].includes(v)) return 'error';
+  if (['pending', 'in progress', 'upcoming', 'scheduled', 'new', 'contacted', 'follow up', 'visit scheduled', 'negotiation', 'hold', 'on hold', 'reserved'].includes(v)) return 'warning';
   return 'neutral';
 };
 
@@ -748,6 +756,50 @@ export function EmptyState({ icon = 'search', title, body }) {
   );
 }
 
+/* ------------------------------------------------ Loading / error / more */
+
+export function LoadingState({ style }) {
+  return (
+    <View style={[{ alignItems: 'center', paddingVertical: spacing.xxxl }, style]}>
+      <ActivityIndicator color={colors.brandPrimary} />
+    </View>
+  );
+}
+
+/** Failed request with a retry button. */
+export function ErrorState({ message, onRetry, style }) {
+  return (
+    <View style={[{ alignItems: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.xl }, style]}>
+      <View style={s.emptyIcon}>
+        <Icon name="circle-x" size={22} color={colors.error} />
+      </View>
+      <Text style={[type.body, { color: colors.onSurface, marginTop: spacing.lg }]}>Couldn’t load this</Text>
+      <Text style={[type.bodySmall, { color: colors.muted, textAlign: 'center', marginTop: spacing.xs }]}>
+        {message || 'Something went wrong. Please try again.'}
+      </Text>
+      {onRetry ? (
+        <SecondaryButton label="Try again" onPress={onRetry} style={{ marginTop: spacing.lg, height: 44 }} />
+      ) : null}
+    </View>
+  );
+}
+
+/** "Load more" for paginated lists. */
+export function LoadMore({ visible, loading, onPress }) {
+  if (!visible && !loading) return null;
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
+      {loading ? (
+        <ActivityIndicator color={colors.brandPrimary} />
+      ) : (
+        <Pressable onPress={onPress} hitSlop={8} style={s.loadMore}>
+          <Text style={s.linkText}>Load more</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 /* -------------------------------------------------------------- styles */
 
 const s = StyleSheet.create({
@@ -1033,6 +1085,15 @@ const s = StyleSheet.create({
   successBody: { ...type.body, color: colors.muted, textAlign: 'center', marginTop: spacing.md },
   successNote: { ...type.bodySmall, color: colors.muted, textAlign: 'center', marginTop: spacing.xl },
   linkText: { ...type.bodySmall, color: colors.brandPrimary },
+  loadMore: {
+    height: 40,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.pill,
+    borderWidth: borderWidth.default,
+    borderColor: colors.brandPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   emptyIcon: {
     width: 56,

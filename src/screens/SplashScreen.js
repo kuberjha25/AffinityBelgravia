@@ -2,11 +2,16 @@ import React, { useEffect } from 'react';
 import { View, Text, Image, StyleSheet, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDispatch } from 'react-redux';
 import { colors, spacing, type } from '../theme';
 import { brand, images } from '../data';
+import { bootstrapSession } from '../store/slices/authSlice';
 
-/** Figma frame: `splash-light` (12:2). */
+const MIN_SPLASH_MS = 1500;
+
+/** Figma frame: `splash-light` (12:2). Restores a saved session, else goes to Login. */
 export default function SplashScreen({ navigation }) {
+  const dispatch = useDispatch();
   const fade = React.useRef(new Animated.Value(0)).current;
   const rise = React.useRef(new Animated.Value(12)).current;
 
@@ -16,9 +21,17 @@ export default function SplashScreen({ navigation }) {
       Animated.timing(rise, { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
 
-    const t = setTimeout(() => navigation.replace('Login'), 2200);
-    return () => clearTimeout(t);
-  }, [fade, rise, navigation]);
+    let cancelled = false;
+    const wait = new Promise((resolve) => setTimeout(resolve, MIN_SPLASH_MS));
+    Promise.all([dispatch(bootstrapSession()), wait]).then(([action]) => {
+      if (cancelled) return;
+      const signedIn = Boolean(action.payload?.token);
+      navigation.reset({ index: 0, routes: [{ name: signedIn ? 'Main' : 'Login' }] });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fade, rise, navigation, dispatch]);
 
   return (
     <View style={s.root}>

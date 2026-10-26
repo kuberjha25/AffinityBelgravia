@@ -47,7 +47,8 @@
             "./assets/fonts/ElectroluxSans-Italic.otf"
           ]
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {
