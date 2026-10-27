@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "410205050648",
+    "project_id": "affinity-b7a5e",
+    "storage_bucket": "affinity-b7a5e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:410205050648:android:365c2c6ea859634e7d306d",
+        "android_client_info": {
+          "package_name": "com.affinity.belgravia"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDyFb4NKlh58QZrb17q4lJXnp31BFQkBfI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

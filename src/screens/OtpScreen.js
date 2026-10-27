@@ -8,7 +8,7 @@ import {
   Pressable,
   Alert,
 } from 'react-native';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { PrimaryButton } from '../components/ui';
@@ -17,7 +17,7 @@ import KeyboardDockedSheet from '../components/KeyboardDockedSheet';
 import { BrandCard, SocialRow } from './LoginScreen';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
 import { auth, images } from '../data';
-import { sendOtp, verifyOtp } from '../store/slices/authSlice';
+import { sendOtp, verifyOtp, selectDevOtp } from '../store/slices/authSlice';
 import { startOnboarding } from '../store/slices/onboardingSlice';
 
 /**
@@ -31,6 +31,20 @@ export default function OtpScreen({ navigation, route }) {
   const [seconds, setSeconds] = useState(30);
   const [verifying, setVerifying] = useState(false);
   const refs = useRef([]);
+  const devOtp = useSelector(selectDevOtp);
+
+  // Testing aid: fill the boxes from the OTP the backend echoed back while SMS
+  // delivery is off. Disappears automatically once SMS works (no OTP returned).
+  const autofillOtp = () => {
+    if (!devOtp) return;
+    const digits = String(devOtp).replace(/\D/g, '').slice(0, auth.otpLength).split('');
+    const next = Array(auth.otpLength).fill('');
+    digits.forEach((d, i) => {
+      next[i] = d;
+    });
+    setCode(next);
+    refs.current[Math.min(digits.length, auth.otpLength) - 1]?.focus();
+  };
 
   const onVerify = async () => {
     setVerifying(true);
@@ -114,6 +128,15 @@ export default function OtpScreen({ navigation, route }) {
             <Text style={s.changeNumberLabel}>Change number</Text>
           </Pressable>
 
+          {devOtp ? (
+            <Pressable onPress={autofillOtp} style={s.devHint} hitSlop={6}>
+              <Text style={s.devHintLabel}>
+                Testing OTP: <Text style={s.devHintCode}>{devOtp}</Text>
+              </Text>
+              <Text style={s.devHintTap}>Tap to fill</Text>
+            </Pressable>
+          ) : null}
+
           <View style={s.otpRow}>
             {code.map((digit, i) => (
               <TextInput
@@ -174,6 +197,22 @@ const s = StyleSheet.create({
   leadStrong: { ...type.bodySmall, color: colors.onSurface },
   changeNumber: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', marginTop: spacing.sm },
   changeNumberLabel: { ...type.bodySmall, color: colors.brandPrimary },
+
+  devHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    borderWidth: borderWidth.default,
+    borderColor: colors.brandPrimary,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  devHintLabel: { ...type.bodySmall, color: colors.muted },
+  devHintCode: { ...type.heading, color: colors.onSurface, letterSpacing: 2 },
+  devHintTap: { ...type.bodySmall, color: colors.brandPrimary },
 
   otpRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
   otpBox: {

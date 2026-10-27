@@ -19,7 +19,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FBF9F5"
       },
-      "package": "com.affinity.belgravia"
+      "package": "com.affinity.belgravia",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -48,13 +49,14 @@
           ]
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-notifications"
     ],
     "extra": {
       "eas": {
-        "projectId": "70816880-dd0f-48b7-95e7-369f98eb4eed"
+        "projectId": "03a9dac2-5336-47ba-8b11-f6ccbb7f11bc"
       }
     },
-    "owner": "kuberjha1998"
+    "owner": "kuberjha25"
   }
 }
