@@ -4,7 +4,8 @@
  * The role comes from the signed-in user's `user_type`:
  *  - `frontend` (CP / Broker / Influencer / Freelancer): view-only access to
  *    their own leads, visits and project information (#2, #4). The backend
- *    already scopes leads and visits to the caller.
+ *    already scopes leads and visits to the caller. They can raise requests
+ *    (payment queries etc.) and track their own.
  *  - `backoffice` (Sales / Front Office staff, Admin): add and edit leads,
  *    schedule visits and mark them attended, register partners (#3).
  *
@@ -17,7 +18,7 @@ export const ROLES = {
 };
 
 export const ROLE_PERMISSIONS = {
-  associate: ['lead.view.own', 'visit.view.own', 'project.view', 'inventory.view', 'document.view'],
+  associate: ['lead.view.own', 'visit.view.own', 'project.view', 'inventory.view', 'document.view', 'request.raise'],
   staff: [
     'lead.view.all',
     'lead.add',

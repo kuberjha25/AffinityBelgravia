@@ -46,13 +46,15 @@ export const partnerTypes = [
   { id: 'freelancer', label: 'Freelancer', icon: 'user' },
 ];
 
-/** `business_type` (channel partners) */
-export const businessTypes = [
-  { value: 'proprietorship', label: 'Proprietorship' },
-  { value: 'partnership', label: 'Partnership' },
-  { value: 'llp', label: 'LLP' },
-  { value: 'company', label: 'Company' },
-  { value: 'individual', label: 'Individual' },
+/**
+ * `business_type` (channel partners). The list is Admin-managed and comes from
+ * GET /business-types; this copy (live values, 17 Nov 2026) is only the
+ * offline fallback. Show `name`, send `slug`.
+ */
+export const businessTypesFallback = [
+  { id: 1, name: 'LLP', slug: 'llp' },
+  { id: 2, name: 'Partnership Firm', slug: 'partnership_firm' },
+  { id: 3, name: 'Proprietorship', slug: 'proprietorship' },
 ];
 
 /** `lead_type` */
@@ -62,29 +64,21 @@ export const leadTypes = [
   { id: 'cold', label: 'Cold', icon: 'snowflake' },
 ];
 
-/** Lead `status` values the list can filter by. */
-export const leadStatuses = [
-  'new',
-  'contacted',
-  'follow_up',
-  'visit_scheduled',
-  'visit_completed',
-  'negotiation',
-  'booked',
-  'closed',
-  'expired',
+/** Lead statuses the backend sets itself; GET /leads/statuses doesn’t list them but leads carry them. */
+export const systemLeadStatuses = ['new', 'follow_up', 'visit_scheduled', 'visit_completed'];
+
+/** User-settable lead statuses — offline fallback for GET /leads/statuses. */
+export const leadStatusesFallback = [
+  { id: 'contacted', name: 'Contacted' },
+  { id: 'negotiation', name: 'Negotiation' },
+  { id: 'booked', name: 'Booked' },
+  { id: 'expired', name: 'Expired' },
+  { id: 'converted', name: 'Converted' },
+  { id: 'lost', name: 'Lost' },
 ];
 
-/** Statuses PUT /leads/{id} accepts (`converted`/`booked` are set by the backend). */
-export const leadUpdateStatuses = [
-  'new',
-  'contacted',
-  'follow_up',
-  'in_progress',
-  'negotiation',
-  'visit_scheduled',
-  'visit_completed',
-];
+/** Activities offered on the Add Follow-up form (free text on the backend). */
+export const followUpActivities = ['Follow Up Call', 'Meeting', 'Site Visit', 'WhatsApp', 'Email'];
 
 /** Visit `status` */
 export const visitStatuses = ['scheduled', 'in_progress', 'completed', 'cancelled'];
@@ -95,6 +89,18 @@ export const dateFilters = [
   { id: 'today', label: 'Today' },
   { id: 'this_week', label: 'This week' },
   { id: 'this_month', label: 'This month' },
+  { id: 'custom', label: 'Custom range' },
+];
+
+/** Partner request `status` / `priority` */
+export const requestStatuses = ['pending', 'in_progress', 'completed', 'rejected'];
+export const requestPriorities = ['low', 'medium', 'high', 'urgent'];
+
+/** Event RSVP `status` */
+export const rsvpOptions = [
+  { id: 'attending', label: 'Attending' },
+  { id: 'maybe', label: 'Maybe' },
+  { id: 'not_attending', label: 'Not Attending' },
 ];
 
 /** News `category` */
@@ -121,6 +127,7 @@ export const quickAccessUser = [
   { id: 'qu3', label: 'Project', icon: 'layers', route: 'Projects' },
   { id: 'qu4', label: 'Inventory', icon: 'shopping-bag', route: 'Inventory' },
   { id: 'qu5', label: 'Documents', icon: 'file', route: 'Documents' },
+  { id: 'qu6', label: 'Requests', icon: 'notepad-text', route: 'Requests' },
 ];
 
 /* ------------------------------------------------------ location lists */
@@ -240,7 +247,9 @@ export const thankYou = {
   title: 'Thank You!',
   body: 'Your application has been submitted successfully.',
   note: 'Our team will review your details and get back to you within 24-48 hours.',
+  pendingNote: 'Your registration is pending approval. You can log in with your mobile number once our team approves it.',
   cta: 'Go to Dashboard',
+  pendingCta: 'Back to Login',
   secondary: 'Contact Support',
 };
 

@@ -25,7 +25,6 @@ const withScheme = (url) => {
 export default function ProfileStepTwoScreen({ navigation }) {
   const dispatch = useDispatch();
   const onboarding = useSelector((state) => state.onboarding);
-  const employeeList = useSelector((state) => state.lookups.references.employee);
   const [knows, setKnows] = useState(onboarding.knowsEmployee);
   const [employee, setEmployee] = useState(onboarding.employee);
   const [social, setSocial] = useState(onboarding.social);
@@ -34,8 +33,8 @@ export default function ProfileStepTwoScreen({ navigation }) {
   const isChannelPartner = onboarding.partnerType === 'channel_partner';
   const showSocial = onboarding.partnerType === 'influencer';
   const total = isChannelPartner ? 3 : 2;
-  // GET /leads/references needs a token, so a brand-new user may not be able to load the list.
-  const employeeListBlocked = onboarding.mode === 'self' && employeeList?.status === 'failed';
+  // Self-registration has no session: the employee list is loaded without a token.
+  const isSelf = onboarding.mode === 'self';
 
   const setSocialField = (key) => (value) => setSocial((sv) => ({ ...sv, [key]: value }));
 
@@ -102,17 +101,12 @@ export default function ProfileStepTwoScreen({ navigation }) {
               <ReferencePicker
                 pickerKey="employee"
                 userType="backoffice"
+                isPublic={isSelf}
                 placeholder="Select associated employee"
                 sheetTitle="Select Employee"
                 value={employee}
                 onChange={setEmployee}
               />
-              {employeeListBlocked ? (
-                <Text style={s.hint}>
-                  The employee list isn’t available before your account is created. Choose “No” to continue —
-                  our team can link your contact later.
-                </Text>
-              ) : null}
             </>
           ) : null}
 
@@ -151,7 +145,6 @@ const s = StyleSheet.create({
   body: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
 
   label: { ...type.bodySmall, color: colors.onSurfaceTertiary, marginBottom: spacing.md },
-  hint: { ...type.caption, color: colors.muted, marginTop: spacing.sm },
 
   toggleRow: { flexDirection: 'row', gap: spacing.md },
   toggle: {

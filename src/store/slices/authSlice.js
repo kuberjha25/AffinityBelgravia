@@ -59,14 +59,33 @@ export const sendOtp = apiThunk('auth/sendOtp', async (mobile) => {
   return { message: res.message || 'OTP sent successfully.', otp: extractOtp(res) };
 });
 
-/** → `{ isNewUser }`. An existing active user is signed in; a new one continues to registration. */
+/**
+ * → `{ outcome, ... }`:
+ * - `signedIn`  active, approved user — token saved
+ * - `newUser`   unknown number — continue to self-registration
+ * - `pending`   registered but not approved by Admin yet (no token)
+ * - `blocked`   HTTP 403, e.g. "Your account is inactive." — `message`
+ * Wrong OTP and other failures reject with the API message.
+ */
 export const verifyOtp = apiThunk('auth/verifyOtp', async ({ mobile, otp }) => {
   const fcmToken = await getPushToken();
-  const res = await authApi.verifyOtp({ mobile, otp, fcmToken, deviceType });
-  if (res.is_new_user || !res.token) return { isNewUser: true, mobile };
+  let res;
+  try {
+    res = await authApi.verifyOtp({ mobile, otp, fcmToken, deviceType });
+  } catch (e) {
+    if (e?.status === 403) return { outcome: 'blocked', message: e.message };
+    throw e;
+  }
+  if (res.is_new_user) return { outcome: 'newUser', mobile };
+  if (!res.token) {
+    return {
+      outcome: 'pending',
+      message: res.message || 'Your registration is pending approval. Please try again once it is approved.',
+    };
+  }
   await saveToken(res.token);
   setAuthToken(res.token);
-  return { isNewUser: false, token: res.token, user: res.user || null };
+  return { outcome: 'signedIn', token: res.token, user: res.user || null };
 });
 
 export const fetchProfile = apiThunk('auth/fetchProfile', async () => {
@@ -82,7 +101,7 @@ export const updateProfile = apiThunk('auth/updateProfile', async ({ fields, pho
   return true;
 });
 
-/** Stores a token handed out by self-registration. */
+/** Stores a token handed out by self-registration (only once Admin auto-approves). */
 export const signInWithToken = apiThunk('auth/signInWithToken', async ({ token, user }, { dispatch }) => {
   await saveToken(token);
   setAuthToken(token);
@@ -128,7 +147,7 @@ const authSlice = createSlice({
         state.bootstrapped = true;
       })
       .addCase(verifyOtp.fulfilled, (state, { payload }) => {
-        if (payload.isNewUser) return;
+        if (payload.outcome !== 'signedIn') return;
         state.token = payload.token;
         state.user = payload.user;
       })

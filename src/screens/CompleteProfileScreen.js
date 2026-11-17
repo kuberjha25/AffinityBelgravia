@@ -6,9 +6,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import KeyboardActionBar, { ACTION_BAR_HEIGHT } from '../components/KeyboardActionBar';
 import Icon from '../components/Icon';
 import DateField from '../components/DateField';
-import { WizardHeader, TextField, StateCityFields, PrimaryButton, Eyebrow } from '../components/ui';
+import { WizardHeader, TextField, PrimaryButton, Eyebrow } from '../components/ui';
+import StateCityFields, { useStates } from '../components/StateCityFields';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { partnerTypes, states } from '../data';
+import { partnerTypes } from '../data';
 import { digits } from '../format';
 import { lookupPincode } from '../api';
 import { patchOnboarding } from '../store/slices/onboardingSlice';
@@ -25,6 +26,7 @@ export default function CompleteProfileScreen({ navigation }) {
   const total = partnerType === 'channel_partner' ? 3 : 2;
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
+  const { canonical } = useStates();
 
   // PIN code → city / state (India Post).
   useEffect(() => {
@@ -32,12 +34,13 @@ export default function CompleteProfileScreen({ navigation }) {
     let cancelled = false;
     lookupPincode(form.pincode).then((place) => {
       if (cancelled || !place) return;
-      const state = states.find((st) => st.toLowerCase() === place.state.toLowerCase()) || place.state;
+      const state = canonical(place.state);
       setForm((f) => ({ ...f, state, city: place.city || f.city }));
     });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.pincode]);
 
   const onContinue = () => {

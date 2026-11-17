@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import Screen, { PageTitle } from '../components/Screen';
 import Icon from '../components/Icon';
-import { TextField, SelectField, StateCityFields, PrimaryButton } from '../components/ui';
+import { TextField, SelectField, PrimaryButton } from '../components/ui';
+import StateCityFields from '../components/StateCityFields';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
 import { leadTypes } from '../data';
 import { digits, isMasked } from '../format';
@@ -11,6 +12,7 @@ import LeadSourceFields, { validateLeadSource } from '../components/LeadSourceFi
 import { createLead, updateLead } from '../store/slices/leadsSlice';
 import { fetchProjects } from '../store/slices/projectsSlice';
 import { useLookup } from '../hooks';
+import { usePermissions } from '../store';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -30,6 +32,7 @@ export default function NewLeadScreen({ navigation, route }) {
   const editing = useSelector((state) => (editId ? state.leads.details[editId] : null));
   const projects = useSelector((state) => state.projects.list);
   const categories = useLookup('categories');
+  const { isStaff } = usePermissions();
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState(() => ({
@@ -107,7 +110,7 @@ export default function NewLeadScreen({ navigation, route }) {
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
       } else {
-        const created = await dispatch(createLead({ ...body, partner_id: form.partner?.id })).unwrap();
+        const created = await dispatch(createLead({ ...body, partner_id: isStaff ? form.partner?.id : undefined })).unwrap();
         Alert.alert('Lead submitted', `${body.full_name} has been added to your leads.`, [
           {
             text: 'OK',
@@ -137,7 +140,7 @@ export default function NewLeadScreen({ navigation, route }) {
           <LeadSourceFields
             form={form}
             onChange={patch}
-            showReferrer={!editing}
+            showReferrer={isStaff && !editing}
             mobilePlaceholder={editing ? 'Mobile (leave blank to keep current)' : undefined}
           />
         </View>

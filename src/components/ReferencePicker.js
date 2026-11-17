@@ -12,8 +12,9 @@ const EMPTY = listInitial();
 
 /**
  * Picks a person from GET /leads/references (searched on the server, 10 per
- * page). `userType="backoffice"` limits it to staff. `value` / `onChange` use
- * the reference row `{ id, name, mobile, display_text }`.
+ * page). `userType="backoffice"` limits it to staff. `isPublic` sends no token
+ * (self-registration). `value` / `onChange` use the reference row
+ * `{ id, name, mobile, display_text }`.
  */
 export default function ReferencePicker({
   pickerKey,
@@ -25,6 +26,7 @@ export default function ReferencePicker({
   sheetTitle,
   icon = 'user',
   disabled,
+  isPublic = false,
 }) {
   const dispatch = useDispatch();
   const list = useSelector((state) => state.lookups.references[pickerKey]) || EMPTY;
@@ -32,7 +34,7 @@ export default function ReferencePicker({
   const [query, setQuery] = useState('');
   const search = useDebounced(query.trim(), 350);
 
-  const load = (page = 1) => dispatch(searchReferences({ key: pickerKey, userType, search, page }));
+  const load = (page = 1) => dispatch(searchReferences({ key: pickerKey, userType, search, page, auth: !isPublic }));
 
   useEffect(() => {
     if (open) load(1);

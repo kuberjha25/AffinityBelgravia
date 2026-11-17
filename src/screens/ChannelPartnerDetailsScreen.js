@@ -9,22 +9,25 @@ import Icon from '../components/Icon';
 import { useRegistrationSubmit } from '../components/RegistrationSubmit';
 import { WizardHeader, TextField, SelectField, PrimaryButton, LoadingState, ErrorState } from '../components/ui';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { businessTypes } from '../data';
+import { businessTypesFallback } from '../data';
 import { patchOnboarding, setDocument } from '../store/slices/onboardingSlice';
-import { useLookup } from '../hooks';
+import { useKeyedLookup, useLookup } from '../hooks';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 
 /**
  * Figma frame: `channel-partner-details` (12:292) — wizard step 3, channel partners only.
- * The document list and which ones are mandatory come from GET /cp-documents (#7).
+ * Business types come from GET /business-types (bundled copy if that fails);
+ * the documents — and which are mandatory — from GET /cp-documents for the
+ * chosen type, reloaded whenever the type changes (#7).
  */
 export default function ChannelPartnerDetailsScreen({ navigation }) {
   const dispatch = useDispatch();
   const onboarding = useSelector((state) => state.onboarding);
-  const cpDocuments = useLookup('cpDocuments');
+  const businessTypes = useLookup('businessTypes');
   const [business, setBusiness] = useState(onboarding.business);
+  const cpDocuments = useKeyedLookup('cpDocuments', business.businessType);
   const { submit, submitting, dialog } = useRegistrationSubmit(navigation);
 
   const set = (key) => (value) => setBusiness((b) => ({ ...b, [key]: value }));
@@ -72,6 +75,12 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
       Alert.alert('Business type', 'Please select the business type.');
       return;
     }
+    if (cpDocuments.status !== 'succeeded') {
+      Alert.alert('Documents', cpDocuments.status === 'failed'
+        ? 'Couldn’t load the required documents. Please retry.'
+        : 'Loading the required documents, please wait.');
+      return;
+    }
     const missing = (cpDocuments.items || []).filter((d) => d.is_mandatory && !onboarding.documents[d.field_key]);
     if (missing.length) {
       Alert.alert('Required documents', `Please upload: ${missing.map((d) => d.name).join(', ')}`);
@@ -81,7 +90,14 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
     submit();
   };
 
-  const businessLabel = businessTypes.find((b) => b.value === business.businessType)?.label || '';
+  const typeRows = businessTypes.items?.length
+    ? businessTypes.items
+    : businessTypes.status === 'failed'
+      ? businessTypesFallback
+      : [];
+  const typeOptions = typeRows.map((b) => ({ label: b.name, value: b.slug }));
+  const businessLabel = typeOptions.find((b) => b.value === business.businessType)?.label || '';
+  const docsLoading = Boolean(business.businessType) && (cpDocuments.status === 'loading' || cpDocuments.status === 'idle');
 
   return (
     <SafeAreaView edges={['top']} style={s.root}>
@@ -106,11 +122,22 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
             <SelectField
               icon="briefcase"
               label="Business Type"
-              placeholder="Select business type"
+              placeholder={businessTypes.status === 'loading' ? 'Loading business types…' : 'Select business type'}
               value={businessLabel}
-              options={businessTypes}
+              options={typeOptions}
               onChange={set('businessType')}
             />
+            {businessTypes.status === 'succeeded' && !typeOptions.length ? (
+              <Text style={s.warn}>
+                No business types have been set up yet, so channel partner registration can’t be completed. Please
+                contact the Affinity Belgravia team.
+              </Text>
+            ) : null}
+            {businessTypes.status === 'failed' ? (
+              <Text style={s.warn} onPress={businessTypes.reload}>
+                Couldn’t load business types — showing the standard list. Tap to retry.
+              </Text>
+            ) : null}
             <TextField icon="file-text" label="GST Number" placeholder="Enter GSTIN" value={business.gstNumber} onChangeText={upper('gstNumber')} autoCapitalize="characters" maxLength={15} />
             <TextField icon="file-text" label="PAN Number" placeholder="Enter PAN" value={business.panNumber} onChangeText={upper('panNumber')} autoCapitalize="characters" maxLength={10} />
             <TextField icon="file-text" label="RERA Registration Number" placeholder="Enter RERA registration number" value={business.reraNumber} onChangeText={upper('reraNumber')} autoCapitalize="characters" />
@@ -120,7 +147,10 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
           <Text style={[s.groupLabel, { marginTop: spacing.xl }]}>Upload Documents</Text>
           <Text style={s.hint}>JPG, PNG or PDF, up to 5 MB each.</Text>
 
-          {cpDocuments.status === 'loading' || cpDocuments.status === 'idle' ? <LoadingState /> : null}
+          {!business.businessType ? (
+            <Text style={s.hint}>Select the business type to see the documents required.</Text>
+          ) : null}
+          {docsLoading ? <LoadingState /> : null}
           {cpDocuments.status === 'failed' ? <ErrorState message={cpDocuments.error} onRetry={cpDocuments.reload} /> : null}
           {cpDocuments.status === 'succeeded' && cpDocuments.items.length === 0 ? (
             <Text style={s.hint}>No documents are required at the moment.</Text>
@@ -173,6 +203,7 @@ const s = StyleSheet.create({
 
   groupLabel: { ...type.bodySmall, color: colors.muted, marginBottom: spacing.md },
   hint: { ...type.caption, color: colors.muted, marginTop: -spacing.sm, marginBottom: spacing.md },
+  warn: { ...type.caption, color: colors.error, marginTop: -spacing.xs },
 
   docRow: {
     flexDirection: 'row',

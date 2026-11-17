@@ -34,6 +34,12 @@ export const fetchUnits = apiThunk('inventory/units', async ({ projectId, towerI
   return res.data || [];
 });
 
+/** "Request for Availability" on a unit. → the API message. */
+export const requestAvailability = apiThunk('inventory/request', async (inventoryId) => {
+  const res = await projectsApi.requestAvailability(inventoryId);
+  return res.message || 'Your inventory request has been recorded successfully.';
+});
+
 const keyed = () => ({ data: {}, status: {}, error: {} });
 
 const initialState = {
@@ -42,6 +48,8 @@ const initialState = {
   towers: keyed(),
   categories: keyed(),
   units: keyed(),
+  /** Units requested this session: `{ [inventoryId]: true }`. */
+  requested: {},
 };
 
 function addKeyedCases(builder, thunk, bucket, keyOf) {
@@ -74,6 +82,9 @@ const projectsSlice = createSlice({
     addKeyedCases(builder, fetchTowers, 'towers', towersKey);
     addKeyedCases(builder, fetchInventoryCategories, 'categories', (a) => categoriesKey(a.projectId, a.towerId));
     addKeyedCases(builder, fetchUnits, 'units', (a) => unitsKey(a.projectId, a.towerId, a.categoryId));
+    builder.addCase(requestAvailability.fulfilled, (state, action) => {
+      state.requested[action.meta.arg] = true;
+    });
   },
 });
 

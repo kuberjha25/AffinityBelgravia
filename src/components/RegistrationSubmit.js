@@ -27,7 +27,10 @@ export function useRegistrationSubmit(navigation) {
     try {
       const result = await dispatch(submitRegistration()).unwrap();
       if (result.mode === 'self') {
-        navigation.reset({ index: 0, routes: [{ name: 'ThankYou' }] });
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'ThankYou', params: { pending: !result.signedIn, message: result.message } }],
+        });
       } else if (result.requiresOtp) {
         setOtpFor(result.mobile);
       } else {

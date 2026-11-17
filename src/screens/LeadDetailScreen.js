@@ -19,16 +19,33 @@ import {
 } from '../components/ui';
 import { formatDate } from '../components/DateField';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { leadTypes, leadUpdateStatuses } from '../data';
-import { fromApiDate, humanize, isMasked, orDash, rupees, toApiDate, todayApiDate } from '../format';
+import { followUpActivities, leadTypes } from '../data';
+import { fromApiDate, humanize, isMasked, orDash, rupees, timeLabel, toApiDate } from '../format';
 import { usePermissions } from '../store';
-import { addFollowup, fetchLead, updateLead } from '../store/slices/leadsSlice';
+import { addFollowup, completeFollowup, fetchLead, updateLead } from '../store/slices/leadsSlice';
+import { useLeadStatuses } from '../hooks';
+
+/** Half-hour follow-up times, 9 AM – 8 PM, sent as "HH:mm". */
+const TIME_OPTIONS = Array.from({ length: 23 }, (_, i) => {
+  const mins = 9 * 60 + i * 30;
+  const value = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+  return { label: timeLabel(value), value };
+});
+
+const blankFollowUp = () => ({
+  date: formatDate(new Date()),
+  time: '',
+  activity: followUpActivities[0],
+  leadType: '', // '' = No Change
+  remarks: '',
+});
 
 /**
  * Figma frames: `lead-detail-screen` (12:2135) and the
  * `lead-update-popup` overlay (12:2415).
- * CP / Broker / Influencer / Freelancer: view only (#2). Staff: edit, update
- * status, add follow-up notes and schedule a visit (#3).
+ * CP / Broker / Influencer / Freelancer: view only (#2); on a converted lead
+ * they can raise a request about it. Staff: edit, update status (with
+ * remarks), add follow-ups, mark follow-ups complete and schedule a visit (#3).
  */
 export default function LeadDetailScreen({ navigation, route }) {
   const dispatch = useDispatch();
@@ -36,12 +53,16 @@ export default function LeadDetailScreen({ navigation, route }) {
   const lead = useSelector((state) => state.leads.details[id]);
   const status = useSelector((state) => state.leads.detailsStatus[id]);
   const error = useSelector((state) => state.leads.detailsError[id]);
-  const { can } = usePermissions();
+  const { can, isStaff } = usePermissions();
   const canEdit = can('lead.edit');
+  const { settable: statusChoices } = useLeadStatuses();
 
-  const [open, setOpen] = useState(false);
+  // One dialog at a time: 'status' | 'followup' | { complete: task }
+  const [dialog, setDialog] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState({ type: '', status: '', followUpDate: '', note: '' });
+  const [statusDraft, setStatusDraft] = useState({ status: '', remarks: '' });
+  const [followDraft, setFollowDraft] = useState(blankFollowUp);
+  const [completeRemarks, setCompleteRemarks] = useState('');
 
   useEffect(() => {
     if (id) dispatch(fetchLead(id));
@@ -60,45 +81,14 @@ export default function LeadDetailScreen({ navigation, route }) {
     );
   }
 
-  const openUpdate = () => {
-    setDraft({ type: lead.lead_type || '', status: lead.status || '', followUpDate: '', note: '' });
-    setOpen(true);
-  };
+  const close = () => setDialog(null);
 
-  /**
-   * A note (with an optional follow-up date) is saved as a follow-up, which
-   * also carries the status / type change; without a note, the lead is updated.
-   */
-  const save = async () => {
-    if (draft.followUpDate && !draft.note.trim()) {
-      Alert.alert('Add a note', 'Please add a note for the follow-up.');
-      return;
-    }
-    // Only send what changed: statuses the backend sets itself (e.g. booked) are rejected on update.
-    const changes = {};
-    if (draft.status && draft.status !== lead.status) changes.status = draft.status;
-    if (draft.type && draft.type !== lead.lead_type) changes.lead_type = draft.type;
-    if (!draft.note.trim() && !Object.keys(changes).length) {
-      setOpen(false);
-      return;
-    }
+  /** Runs a save; closes the dialog on success, alerts the API message on failure. */
+  const run = async (action) => {
     setSaving(true);
     try {
-      if (draft.note.trim()) {
-        await dispatch(
-          addFollowup({
-            id: lead.id,
-            body: {
-              followup_date: toApiDate(draft.followUpDate) || todayApiDate(),
-              remarks: draft.note.trim(),
-              ...changes,
-            },
-          })
-        ).unwrap();
-      } else {
-        await dispatch(updateLead({ id: lead.id, body: changes })).unwrap();
-      }
-      setOpen(false);
+      await dispatch(action).unwrap();
+      close();
     } catch (message) {
       Alert.alert('Could not save', String(message));
     } finally {
@@ -106,11 +96,57 @@ export default function LeadDetailScreen({ navigation, route }) {
     }
   };
 
+  const openStatus = () => {
+    setStatusDraft({ status: '', remarks: '' });
+    setDialog('status');
+  };
+
+  /** PUT /leads/{id} with `status` — `remarks` are mandatory (min 3 characters). */
+  const saveStatus = () => {
+    if (!statusDraft.status) return Alert.alert('Select status', 'Please choose the new status.');
+    if (statusDraft.remarks.trim().length < 3) {
+      return Alert.alert('Remarks required', 'Please add remarks (at least 3 characters) for this change.');
+    }
+    return run(updateLead({ id: lead.id, body: { status: statusDraft.status, remarks: statusDraft.remarks.trim() } }));
+  };
+
+  const openFollowUp = () => {
+    setFollowDraft(blankFollowUp());
+    setDialog('followup');
+  };
+
+  /** POST /leads/{id}/followups — `lead_type` only when changed, never `status`. */
+  const saveFollowUp = () => {
+    if (!followDraft.date) return Alert.alert('Follow-up date', 'Please select the follow-up date.');
+    if (!followDraft.remarks.trim()) return Alert.alert('Remarks required', 'Please add a note for this follow-up.');
+    const body = {
+      followup_date: toApiDate(followDraft.date),
+      followup_time: followDraft.time || undefined,
+      activity: followDraft.activity || undefined,
+      remarks: followDraft.remarks.trim(),
+    };
+    if (followDraft.leadType && followDraft.leadType !== lead.lead_type) body.lead_type = followDraft.leadType;
+    return run(addFollowup({ id: lead.id, body }));
+  };
+
+  const openComplete = (task) => {
+    setCompleteRemarks('');
+    setDialog({ complete: task });
+  };
+
+  const saveComplete = () => {
+    if (!completeRemarks.trim()) return Alert.alert('Remarks required', 'Please add a note on how the follow-up went.');
+    return run(completeFollowup({ id: lead.id, followupId: dialog.complete.id, remarks: completeRemarks.trim() }));
+  };
+
   const nextFollowUp = /^\d{4}-\d{2}-\d{2}/.test(lead.next_follow_up || '') ? fromApiDate(lead.next_follow_up) : lead.next_follow_up;
   const callable = lead.mobile && !isMasked(lead.mobile);
   const mailable = lead.email && !isMasked(lead.email);
   const history = lead.history || [];
-  const statusOptions = leadUpdateStatuses.map((v) => ({ label: humanize(v), value: v }));
+  const statusOptions = statusChoices.filter((st) => st.id !== lead.status).map((st) => ({ label: st.label, value: st.id }));
+  const statusLabel = statusChoices.find((st) => st.id === statusDraft.status)?.label || '';
+  const canRaiseRequest = !isStaff && lead.status === 'converted';
+  const task = dialog?.complete;
 
   return (
     <Screen showBack refreshing={false} onRefresh={() => dispatch(fetchLead(id))}>
@@ -164,9 +200,10 @@ export default function LeadDetailScreen({ navigation, route }) {
           <Text style={s.cardTitle}>History</Text>
           <View style={{ marginTop: spacing.lg }}>
             {history.map((h, i) => (
-              <View key={`${h.date}-${i}`} style={s.historyRow}>
+              <View key={h.id ? `${h.type}-${h.id}` : `${h.date}-${i}`} style={s.historyRow}>
                 <View style={{ width: 86 }}>
                   <Text style={s.histDate}>{fromApiDate(h.date)}</Text>
+                  {h.time ? <Text style={s.histTime}>{timeLabel(h.time)}</Text> : null}
                 </View>
                 <View style={s.rail}>
                   <View style={s.dot} />
@@ -181,6 +218,25 @@ export default function LeadDetailScreen({ navigation, route }) {
                       <Text style={s.histBy}>{h.user_name}</Text>
                     </View>
                   ) : null}
+                  {h.type === 'task' && h.is_completed ? (
+                    <View style={{ marginTop: spacing.sm }}>
+                      <View style={s.byRow}>
+                        <Icon name="circle-check" size={12} color={colors.success} />
+                        <Text style={s.doneLabel}>Completed</Text>
+                      </View>
+                      {h.completion_remarks ? <Text style={s.histDetail}>{h.completion_remarks}</Text> : null}
+                    </View>
+                  ) : null}
+                  {h.type === 'task' && !h.is_completed && h.id ? (
+                    canEdit ? (
+                      <Pressable onPress={() => openComplete(h)} hitSlop={8} style={s.completeBtn}>
+                        <Icon name="check" size={12} color={colors.brandPrimary} />
+                        <Text style={s.completeLabel}>Mark Complete</Text>
+                      </Pressable>
+                    ) : (
+                      <Text style={s.pendingLabel}>Pending</Text>
+                    )
+                  ) : null}
                 </View>
               </View>
             ))}
@@ -192,8 +248,8 @@ export default function LeadDetailScreen({ navigation, route }) {
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={[s.cardTitle, { flex: 1 }]}>Remarks</Text>
             {canEdit ? (
-              <Pressable onPress={openUpdate} hitSlop={8}>
-                <Text style={s.addNote}>Add Note</Text>
+              <Pressable onPress={openFollowUp} hitSlop={8}>
+                <Text style={s.addNote}>Add Follow-up</Text>
               </Pressable>
             ) : null}
           </View>
@@ -210,25 +266,88 @@ export default function LeadDetailScreen({ navigation, route }) {
                 onPress={() => navigation.navigate('ScheduleVisit', { leadId: lead.id })}
                 style={{ flex: 1 }}
               />
-              <SecondaryButton label="Update Status" onPress={openUpdate} style={{ flex: 1 }} />
+              <SecondaryButton label="Update Status" onPress={openStatus} style={{ flex: 1 }} />
             </View>
-            <SecondaryButton label="Edit Lead" icon="edit" onPress={() => navigation.navigate('NewLead', { id: lead.id })} />
+            <View style={{ flexDirection: 'row', gap: spacing.md }}>
+              <SecondaryButton label="Add Follow-up" icon="calendar" onPress={openFollowUp} style={{ flex: 1 }} />
+              <SecondaryButton
+                label="Edit Lead"
+                icon="edit"
+                onPress={() => navigation.navigate('NewLead', { id: lead.id })}
+                style={{ flex: 1 }}
+              />
+            </View>
           </>
         ) : (
-          <Text style={s.viewOnly}>View only. Contact the Affinity Belgravia sales team to update this lead.</Text>
+          <>
+            {canRaiseRequest ? (
+              <PrimaryButton
+                label="Raise Request"
+                icon="notepad-text"
+                onPress={() =>
+                  navigation.navigate('NewRequest', { remarks: `Lead: ${lead.full_name} (${lead.mobile || ''})\n` })
+                }
+              />
+            ) : null}
+            <Text style={s.viewOnly}>View only. Contact the Affinity Belgravia sales team to update this lead.</Text>
+          </>
         )}
       </View>
 
-      <CenterDialog visible={open} onClose={() => setOpen(false)} title="Update Lead">
+      <CenterDialog visible={dialog === 'status'} onClose={close} title="Update Status">
+        <Text style={s.fieldLabel}>{`Current: ${humanize(lead.status)}`}</Text>
+        <SelectField
+          label="New Status"
+          value={statusLabel}
+          placeholder={statusOptions.length ? 'Select status' : 'Loading statuses…'}
+          options={statusOptions}
+          onChange={(v) => setStatusDraft((d) => ({ ...d, status: v }))}
+        />
+        <TextField
+          label="Remarks (required)"
+          placeholder="Why is the status changing?"
+          value={statusDraft.remarks}
+          onChangeText={(v) => setStatusDraft((d) => ({ ...d, remarks: v }))}
+          multiline
+          maxLength={500}
+        />
+        <PrimaryButton label="Update Status" onPress={saveStatus} loading={saving} />
+      </CenterDialog>
+
+      <CenterDialog visible={dialog === 'followup'} onClose={close} title="Add Follow-up">
+        <View style={{ flexDirection: 'row', gap: spacing.md }}>
+          <DateField
+            label="Date"
+            placeholder="Select date"
+            value={followDraft.date}
+            onChange={(v) => setFollowDraft((d) => ({ ...d, date: v }))}
+            style={{ flex: 1 }}
+          />
+          <SelectField
+            label="Time"
+            placeholder="Optional"
+            value={followDraft.time ? timeLabel(followDraft.time) : ''}
+            options={TIME_OPTIONS}
+            onChange={(v) => setFollowDraft((d) => ({ ...d, time: v }))}
+            sheetTitle="Follow-up Time"
+            style={{ flex: 1 }}
+          />
+        </View>
+        <SelectField
+          label="Activity"
+          value={followDraft.activity}
+          options={followUpActivities}
+          onChange={(v) => setFollowDraft((d) => ({ ...d, activity: v }))}
+        />
         <View>
           <Text style={s.fieldLabel}>Lead Type</Text>
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-            {leadTypes.map((t) => {
-              const active = draft.type === t.id;
+          <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
+            {[{ id: '', label: 'No Change' }, ...leadTypes].map((t) => {
+              const active = followDraft.leadType === t.id;
               return (
                 <Pressable
-                  key={t.id}
-                  onPress={() => setDraft((d) => ({ ...d, type: t.id }))}
+                  key={t.id || 'none'}
+                  onPress={() => setFollowDraft((d) => ({ ...d, leadType: t.id }))}
                   style={[s.typeChip, active && s.typeChipActive]}
                 >
                   <Text style={[s.typeChipLabel, active && { color: colors.onBrand }]}>{t.label}</Text>
@@ -237,32 +356,32 @@ export default function LeadDetailScreen({ navigation, route }) {
             })}
           </View>
         </View>
-
-        <SelectField
-          label="Lead Status"
-          value={draft.status ? humanize(draft.status) : ''}
-          placeholder="Select status"
-          options={statusOptions}
-          onChange={(v) => setDraft((d) => ({ ...d, status: v }))}
-        />
-
-        <DateField
-          label="Follow-up Date"
-          placeholder={`Today (${formatDate(new Date())})`}
-          value={draft.followUpDate}
-          onChange={(v) => setDraft((d) => ({ ...d, followUpDate: v }))}
-        />
-
         <TextField
-          label="Notes"
-          placeholder="Add notes about this lead..."
-          value={draft.note}
-          onChangeText={(v) => setDraft((d) => ({ ...d, note: v }))}
+          label="Remarks (required)"
+          placeholder="Add notes about this follow-up..."
+          value={followDraft.remarks}
+          onChangeText={(v) => setFollowDraft((d) => ({ ...d, remarks: v }))}
           multiline
           maxLength={500}
         />
+        <PrimaryButton label="Save Follow-up" onPress={saveFollowUp} loading={saving} />
+      </CenterDialog>
 
-        <PrimaryButton label="Save Update" onPress={save} loading={saving} />
+      <CenterDialog visible={Boolean(task)} onClose={close} title="Complete Follow-up">
+        {task ? (
+          <Text style={s.fieldLabel}>
+            {[task.activity, fromApiDate(task.date), task.time ? timeLabel(task.time) : null].filter(Boolean).join(' · ')}
+          </Text>
+        ) : null}
+        <TextField
+          label="Outcome (required)"
+          placeholder="e.g. Client answered, wants to visit next week."
+          value={completeRemarks}
+          onChangeText={setCompleteRemarks}
+          multiline
+          maxLength={500}
+        />
+        <PrimaryButton label="Mark Complete" onPress={saveComplete} loading={saving} />
       </CenterDialog>
     </Screen>
   );
@@ -314,6 +433,7 @@ const s = StyleSheet.create({
 
   historyRow: { flexDirection: 'row', gap: spacing.md },
   histDate: { ...type.caption, color: colors.brandPrimary },
+  histTime: { ...type.caption, color: colors.muted, marginTop: 2 },
   rail: { width: 10, alignItems: 'center', paddingTop: 4 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brandPrimary },
   line: { flex: 1, width: 1, backgroundColor: colors.border, marginTop: 4 },
@@ -321,6 +441,21 @@ const s = StyleSheet.create({
   histDetail: { ...type.bodySmall, color: colors.muted, marginTop: 2 },
   byRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs },
   histBy: { ...type.caption, color: colors.muted },
+  doneLabel: { ...type.caption, color: colors.success },
+  pendingLabel: { ...type.caption, color: colors.brandPrimary, marginTop: spacing.sm },
+  completeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    height: 28,
+    borderRadius: radius.pill,
+    borderWidth: borderWidth.default,
+    borderColor: colors.brandPrimary,
+  },
+  completeLabel: { ...type.caption, color: colors.brandPrimary },
 
   addNote: { ...type.bodySmall, color: colors.brandPrimary },
   viewOnly: { ...type.caption, color: colors.muted, textAlign: 'center' },

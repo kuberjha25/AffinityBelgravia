@@ -23,6 +23,7 @@ import { usePermissions } from '../store';
 import { fetchVisits } from '../store/slices/visitsSlice';
 import { hasMore } from '../store/helpers';
 import { useDebounced, useRefetchWhenStale } from '../hooks';
+import { DateRangeRow, useDateFilter } from '../components/DateRange';
 
 const statusChips = [{ id: '', label: 'All' }, ...visitStatuses.map((id) => ({ id, label: humanize(id) }))];
 const DEFAULTS = { status: '', date: dateFilters[0].label };
@@ -51,6 +52,7 @@ export default function SiteVisitsScreen({ navigation, route }) {
   const presetStatus = route?.params?.status;
   const [f, setF] = useState(() => ({ ...DEFAULTS, status: presetStatus ?? '' }));
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const range = useDateFilter(f.date);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -61,9 +63,9 @@ export default function SiteVisitsScreen({ navigation, route }) {
     () => ({
       search: search || undefined,
       status: f.status || undefined,
-      date_filter: dateFilters.find((d) => d.label === f.date)?.id || undefined,
+      ...range.params,
     }),
-    [search, f.status, f.date]
+    [search, f.status, range.params]
   );
 
   const load = (page = 1) => dispatch(fetchVisits({ ...params, page }));
@@ -119,6 +121,8 @@ export default function SiteVisitsScreen({ navigation, route }) {
         style={{ marginTop: spacing.lg }}
         contentStyle={{ paddingHorizontal: spacing.xl }}
       />
+
+      <DateRangeRow range={range} />
 
       <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.md }}>
         {list.items.map((v) => (

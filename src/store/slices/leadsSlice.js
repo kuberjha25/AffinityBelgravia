@@ -32,12 +32,26 @@ export const updateLead = apiThunk('leads/update', async ({ id, body }, { dispat
   return res.data;
 });
 
-/** Adds a follow-up / note; `status` and `lead_type` (optional) also update the lead. */
+/**
+ * Adds a follow-up: `{ followup_date, followup_time?, activity?, remarks, lead_type? }`.
+ * Send `lead_type` only when it changed; never `status` — the backend moves a
+ * `new` lead to `follow_up` itself.
+ */
 export const addFollowup = apiThunk('leads/addFollowup', async ({ id, body }, { dispatch }) => {
   const res = await leadsApi.addFollowup(id, body);
   dispatch(fetchLead(id));
   return res.data;
 });
+
+/** Marks a follow-up task (`history[]` entry with `type: "task"`) done, then reloads the lead. */
+export const completeFollowup = apiThunk(
+  'leads/completeFollowup',
+  async ({ id, followupId, remarks }, { dispatch }) => {
+    const res = await leadsApi.completeFollowup(id, followupId, remarks);
+    await dispatch(fetchLead(id));
+    return res.message;
+  }
+);
 
 const initialState = { list: listInitial(), ...detailInitial() };
 
@@ -56,7 +70,8 @@ const leadsSlice = createSlice({
     builder
       .addCase(createLead.fulfilled, markStale)
       .addCase(updateLead.fulfilled, markStale)
-      .addCase(addFollowup.fulfilled, markStale);
+      .addCase(addFollowup.fulfilled, markStale)
+      .addCase(completeFollowup.fulfilled, markStale);
   },
 });
 

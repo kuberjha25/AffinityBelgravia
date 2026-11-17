@@ -9,9 +9,10 @@ import { useLookup } from '../hooks';
 /**
  * Lead Source, referrer and the customer's mobile, used by the New Lead form.
  *
- * Sources are Admin-managed (GET /leads/sources). The referrer — the CP /
- * Broker / Influencer / Freelancer who brought the customer — is picked from
- * GET /leads/references and sent as `partner_id`.
+ * Sources are Admin-managed (GET /leads/sources). "Lead For" — the CP /
+ * Broker / Influencer / Freelancer whose lead this is — is picked from
+ * GET /leads/references and sent as `partner_id`. Backoffice only: the
+ * backend rejects `partner_id` from a partner, so pass `showReferrer` only for staff.
  *
  * Expects `form.source`, `form.partner`, `form.mobile`; `onChange(patch)` merges.
  */
@@ -49,8 +50,8 @@ export default function LeadSourceFields({ form, onChange, showReferrer = true, 
         <ReferencePicker
           pickerKey="leadReferrer"
           icon="user"
-          placeholder="Referred by (optional)"
-          sheetTitle="Referred by"
+          placeholder="Lead For (optional)"
+          sheetTitle="Lead For"
           value={form.partner}
           onChange={(partner) => onChange({ partner })}
         />

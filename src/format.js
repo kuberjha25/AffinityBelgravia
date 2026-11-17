@@ -20,6 +20,25 @@ export const fromApiDate = (value) => {
   return formatDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
 };
 
+/** "15:30" / "15:30:00" → "3:30 PM"; other text is returned as is. */
+export const timeLabel = (value) => {
+  const m = String(value || '').match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return String(value || '');
+  const h = Number(m[1]);
+  return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+};
+
+/**
+ * "2026-11-09 13:21:00" in **UTC** (partner requests) → "9 Nov 2026, 6:51 PM"
+ * in the device's time zone. Other text is returned as is.
+ */
+export const fromUtcDateTime = (value) => {
+  const m = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return value ? String(value) : '';
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
+  return `${formatDate(d)}, ${timeLabel(`${d.getHours()}:${pad(d.getMinutes())}`)}`;
+};
+
 /** Today as "YYYY-MM-DD". */
 export const todayApiDate = () => {
   const d = new Date();

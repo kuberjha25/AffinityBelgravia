@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, ScrollView, Linking } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import Screen from '../components/Screen';
 import Icon from '../components/Icon';
 import {
   Card,
+  ChipRow,
   StatusPill,
   BottomSheet,
   PrimaryButton,
+  SecondaryButton,
   TextField,
   SectionTitle,
   EmptyState,
@@ -32,13 +34,16 @@ const shareMessage = (doc, name) =>
  * Figma frame: `inventory-accordion-screen` @ 7931 (12:1797) — the documents list.
  * Staff can also share a document on WhatsApp (#6): select document → select
  * user → registered number (or another) → send.
+ * Partners can ask for a document that isn't listed ("Request Document"). Until
+ * the backend has a dedicated endpoint this raises a partner request.
  */
-export default function DocumentsScreen({ route }) {
+export default function DocumentsScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const projectId = route?.params?.projectId;
   const list = useSelector((state) => state.content.documents);
   const { can } = usePermissions();
   const canShare = can('document.share');
+  const canRequest = can('request.raise');
   const [sharing, setSharing] = useState(null);
   const [recipient, setRecipient] = useState(emptyRecipient);
   const [message, setMessage] = useState('');
@@ -50,8 +55,19 @@ export default function DocumentsScreen({ route }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
-  const groups = list.items;
-  const banner = groups.length === 1 ? groups[0] : null;
+  // Document types are Admin-managed; offer the ones present in the loaded documents.
+  const [docType, setDocType] = useState('');
+  const typeChips = useMemo(() => {
+    const names = new Set();
+    list.items.forEach((g) => (g.documents || []).forEach((d) => d.category && names.add(d.category)));
+    return [{ id: '', label: 'All' }, ...[...names].sort().map((n) => ({ id: n, label: n }))];
+  }, [list.items]);
+  const groups = docType
+    ? list.items
+        .map((g) => ({ ...g, documents: (g.documents || []).filter((d) => d.category === docType) }))
+        .filter((g) => g.documents.length)
+    : list.items;
+  const banner = list.items.length === 1 ? list.items[0] : null;
 
   const open = (doc) => {
     if (!doc.file_url) return;
@@ -92,6 +108,16 @@ export default function DocumentsScreen({ route }) {
         image={images.heroInventory}
       />
 
+      {typeChips.length > 2 ? (
+        <ChipRow
+          options={typeChips}
+          value={docType}
+          onChange={setDocType}
+          style={{ marginTop: spacing.lg }}
+          contentStyle={{ paddingHorizontal: spacing.lg }}
+        />
+      ) : null}
+
       <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.md }}>
         {groups.map((group) => (
           <View key={group.id} style={{ gap: spacing.md }}>
@@ -127,9 +153,28 @@ export default function DocumentsScreen({ route }) {
         {list.status === 'loading' && list.page === 0 ? <LoadingState /> : null}
         {list.status === 'failed' && !groups.length ? <ErrorState message={list.error} onRetry={() => load(1)} /> : null}
         {list.status === 'succeeded' && !groups.length ? (
-          <EmptyState icon="file" title="No documents yet" body="Project documents will appear here once uploaded." />
+          docType ? (
+            <EmptyState icon="file" title={`No ${docType} documents`} body="Try another document type." />
+          ) : (
+            <EmptyState icon="file" title="No documents yet" body="Project documents will appear here once uploaded." />
+          )
         ) : null}
         <LoadMore visible={hasMore(list)} loading={list.status === 'loading' && list.page > 0} onPress={() => load(list.page + 1)} />
+
+        {canRequest && list.status !== 'loading' ? (
+          <SecondaryButton
+            label="Request Document"
+            icon="file-text"
+            onPress={() =>
+              navigation.navigate('NewRequest', {
+                typeHint: 'document',
+                remarks: `Document request${banner ? ` — ${banner.name}` : ''}${docType ? ` (${docType})` : ''}:
+`,
+              })
+            }
+            style={{ marginTop: spacing.md }}
+          />
+        ) : null}
       </View>
 
       <BottomSheet visible={Boolean(sharing)} onClose={() => setSharing(null)} title="Share on WhatsApp">

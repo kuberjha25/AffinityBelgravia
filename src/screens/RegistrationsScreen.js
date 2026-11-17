@@ -18,6 +18,7 @@ import {
 } from '../components/ui';
 import { colors, spacing, type, radius } from '../theme';
 import { dateFilters, partnerTypes } from '../data';
+import { DateRangeRow, useDateFilter } from '../components/DateRange';
 import { humanize, orDash } from '../format';
 import { usePermissions } from '../store';
 import { fetchRegistrations } from '../store/slices/registrationsSlice';
@@ -42,15 +43,16 @@ export default function RegistrationsScreen({ navigation }) {
   const [partnerType, setPartnerType] = useState('All');
   const [date, setDate] = useState(dateFilters[0].label);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const range = useDateFilter(date);
   const [refreshing, setRefreshing] = useState(false);
 
   const params = useMemo(
     () => ({
       status: tab,
       search: search || undefined,
-      date_filter: dateFilters.find((d) => d.label === date)?.id || undefined,
+      ...range.params,
     }),
-    [tab, search, date]
+    [tab, search, range.params]
   );
 
   const load = (page = 1) => dispatch(fetchRegistrations({ ...params, page }));
@@ -119,6 +121,8 @@ export default function RegistrationsScreen({ navigation }) {
         style={{ marginTop: spacing.lg }}
         contentStyle={{ paddingHorizontal: spacing.xl }}
       />
+
+      <DateRangeRow range={range} />
 
       <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.md }}>
         {rows.map((r) => (

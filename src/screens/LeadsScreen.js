@@ -17,17 +17,16 @@ import {
   FilterSheet,
 } from '../components/ui';
 import { colors, spacing, type } from '../theme';
-import { dateFilters, leadStatuses, leadTypes } from '../data';
+import { dateFilters, leadTypes } from '../data';
 import { humanize, orDash } from '../format';
 import { usePermissions } from '../store';
 import { fetchLeads } from '../store/slices/leadsSlice';
+import { DateRangeRow, useDateFilter } from '../components/DateRange';
 import { hasMore } from '../store/helpers';
-import { useDebounced, useLookup, useRefetchWhenStale } from '../hooks';
+import { useDebounced, useLeadStatuses, useLookup, useRefetchWhenStale } from '../hooks';
 
 const ALL = 'All';
 const DEFAULTS = { status: '', type: ALL, source: ALL, date: dateFilters[0].label };
-
-const statusChips = [{ id: '', label: 'All' }, ...leadStatuses.map((id) => ({ id, label: humanize(id) }))];
 
 /**
  * Figma frame: `leads-list-screen` (12:1965).
@@ -40,12 +39,16 @@ export default function LeadsScreen({ navigation, route }) {
   const canAdd = can('lead.add');
   const list = useSelector((state) => state.leads.list);
   const sources = useLookup('sources');
+  // System statuses (new, follow_up, …) + the settable ones from GET /leads/statuses.
+  const { all: allStatuses } = useLeadStatuses();
+  const statusChips = useMemo(() => [{ id: '', label: 'All' }, ...allStatuses], [allStatuses]);
   const [query, setQuery] = useState('');
   const search = useDebounced(query.trim());
   // #15: dashboard counts open this list pre-filtered.
   const presetStatus = route?.params?.status;
   const [f, setF] = useState(() => ({ ...DEFAULTS, status: presetStatus ?? '' }));
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const range = useDateFilter(f.date);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -57,9 +60,9 @@ export default function LeadsScreen({ navigation, route }) {
       search: search || undefined,
       status: f.status || undefined,
       lead_type: f.type === ALL ? undefined : leadTypes.find((t) => t.label === f.type)?.id,
-      date_filter: dateFilters.find((d) => d.label === f.date)?.id || undefined,
+      ...range.params,
     }),
-    [search, f.status, f.type, f.date]
+    [search, f.status, f.type, range.params]
   );
 
   const load = (page = 1) => dispatch(fetchLeads({ ...params, page }));
@@ -131,6 +134,8 @@ export default function LeadsScreen({ navigation, route }) {
         style={{ marginTop: spacing.lg }}
         contentStyle={{ paddingHorizontal: spacing.xl }}
       />
+
+      <DateRangeRow range={range} />
 
       <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.md }}>
         {list.status === 'succeeded' || list.items.length ? (

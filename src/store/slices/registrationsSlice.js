@@ -54,14 +54,28 @@ function registrationFields(o) {
 }
 
 /**
+ * Only the files for documents the chosen business type asks for — a file
+ * picked under another type would otherwise be uploaded too.
+ */
+function documentsFor(o, lookups) {
+  if (o.partnerType !== 'channel_partner') return {};
+  const list = lookups.cpDocuments[o.business?.businessType];
+  if (list?.status !== 'succeeded') return o.documents;
+  const keys = new Set(list.items.map((d) => d.field_key));
+  return Object.fromEntries(Object.entries(o.documents).filter(([key]) => keys.has(key)));
+}
+
+/**
  * Submits the registration wizard.
- * Self-registration signs the new partner in; a staff registration returns
- * `{ requiresOtp, mobile }` so the partner's mobile can be verified next.
+ * Self-registration → `{ mode: 'self', signedIn, message }`. The backend
+ * returns `token: null` until Admin approves; then the partner is NOT signed in.
+ * Staff registration → `{ requiresOtp, mobile }` so the partner's mobile can be
+ * verified next. Nothing from that response is used to sign in.
  */
 export const submitRegistration = apiThunk('registrations/submit', async (_, { getState, dispatch }) => {
-  const o = getState().onboarding;
+  const { onboarding: o, lookups } = getState();
   const fields = registrationFields(o);
-  const documents = o.partnerType === 'channel_partner' ? o.documents : {};
+  const documents = documentsFor(o, lookups);
 
   if (o.mode === 'admin') {
     const res = await registrationApi.adminRegister(fields, documents);
@@ -70,7 +84,7 @@ export const submitRegistration = apiThunk('registrations/submit', async (_, { g
 
   const res = await registrationApi.register(fields, documents);
   if (res.token) await dispatch(signInWithToken({ token: res.token, user: res.data || null }));
-  return { mode: 'self', message: res.message };
+  return { mode: 'self', signedIn: Boolean(res.token), message: res.message };
 });
 
 export const verifyRegistrantOtp = apiThunk('registrations/verifyOtp', async ({ mobile, otp }) => {

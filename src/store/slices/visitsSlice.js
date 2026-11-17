@@ -19,7 +19,22 @@ export const scheduleVisit = apiThunk('visits/schedule', async (body) => {
   return res.data;
 });
 
-export const attendVisit = apiThunk('visits/attend', async ({ id, remarks }, { dispatch }) => {
+/**
+ * Create Visit form: the existing lead for a mobile.
+ * → `{ lead }` (null when none) or `{ blocked: message }` when the number is
+ * registered to another partner (HTTP 403) — submitting must then be blocked.
+ */
+export const lookupVisitLead = apiThunk('visits/fetchLead', async (mobile) => {
+  try {
+    const res = await visitsApi.fetchLead(mobile);
+    return { lead: res.data || null };
+  } catch (e) {
+    if (e?.status === 403) return { blocked: e.message };
+    throw e;
+  }
+});
+
+export const attendVisit =apiThunk('visits/attend', async ({ id, remarks }, { dispatch }) => {
   const res = await visitsApi.attend(id, remarks);
   dispatch(fetchVisit(id));
   return res.data;

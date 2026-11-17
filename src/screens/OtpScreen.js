@@ -50,9 +50,15 @@ export default function OtpScreen({ navigation, route }) {
     setVerifying(true);
     try {
       const result = await dispatch(verifyOtp({ mobile, otp: code.join('') })).unwrap();
-      if (result.isNewUser) {
+      if (result.outcome === 'newUser') {
         dispatch(startOnboarding({ mode: 'self', mobile }));
         navigation.navigate('CompleteProfile');
+      } else if (result.outcome === 'pending') {
+        Alert.alert('Pending approval', result.message, [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      } else if (result.outcome === 'blocked') {
+        Alert.alert('Account unavailable', result.message || 'Your account is inactive.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
       } else {
         navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
       }

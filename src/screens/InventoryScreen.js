@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
+import { View, Text, Image, StyleSheet, Pressable, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDispatch, useSelector } from 'react-redux';
 import Screen from '../components/Screen';
 import Icon from '../components/Icon';
-import { Card, ChipRow, StatusPill, EmptyState, ErrorState, LoadingState } from '../components/ui';
+import { Card, ChipRow, StatusPill, EmptyState, ErrorState, LoadingState, SecondaryButton } from '../components/ui';
 import { colors, radius, spacing, type } from '../theme';
 import { images } from '../data';
 import { imageFill } from '../components/fill';
@@ -15,6 +15,7 @@ import {
   fetchProjects,
   fetchTowers,
   fetchUnits,
+  requestAvailability,
   towersKey,
   unitsKey,
 } from '../store/slices/projectsSlice';
@@ -30,7 +31,8 @@ const unitTone = (status) => {
 /**
  * Figma frames: `inventory-list-screen` (12:1584) and
  * `inventory-accordion-screen` (12:1681) — one screen, collapsed and expanded.
- * Project → tower → configuration → units.
+ * Project → tower → configuration → units. Each unit can be sent a
+ * "Request for Availability" (POST /inventory-request).
  */
 export default function InventoryScreen({ route }) {
   const dispatch = useDispatch();
@@ -39,6 +41,20 @@ export default function InventoryScreen({ route }) {
   const [towerId, setTowerId] = useState(null);
   const [categoryId, setCategoryId] = useState(null);
   const [open, setOpen] = useState(null);
+  const requested = useSelector((state) => state.projects.requested);
+  const [requesting, setRequesting] = useState(null);
+
+  const askAvailability = async (unit) => {
+    setRequesting(unit.id);
+    try {
+      const message = await dispatch(requestAvailability(unit.id)).unwrap();
+      Alert.alert('Request sent', message);
+    } catch (message) {
+      Alert.alert('Could not send request', String(message));
+    } finally {
+      setRequesting(null);
+    }
+  };
 
   const pid = projectId ?? projects.items[0]?.id ?? null;
   const project = projects.items.find((p) => p.id === pid);
@@ -180,14 +196,29 @@ export default function InventoryScreen({ route }) {
               </Pressable>
 
               {expanded ? (
-                <View style={s.detailGrid}>
-                  {details.map(([label, value]) => (
-                    <View key={label} style={s.detailCell}>
-                      <Text style={s.detailLabel}>{label}</Text>
-                      <Text style={s.detailValue}>{String(value)}</Text>
-                    </View>
-                  ))}
-                </View>
+                <>
+                  <View style={s.detailGrid}>
+                    {details.map(([label, value]) => (
+                      <View key={label} style={s.detailCell}>
+                        <Text style={s.detailLabel}>{label}</Text>
+                        <Text style={s.detailValue}>{String(value)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <SecondaryButton
+                    label={
+                      requested[unit.id]
+                        ? 'Requested'
+                        : requesting === unit.id
+                          ? 'Sending…'
+                          : 'Request for Availability'
+                    }
+                    icon={requested[unit.id] ? 'check' : 'bell'}
+                    disabled={Boolean(requested[unit.id]) || requesting === unit.id}
+                    onPress={() => askAvailability(unit)}
+                    style={{ height: 44 }}
+                  />
+                </>
               ) : null}
             </Card>
           );

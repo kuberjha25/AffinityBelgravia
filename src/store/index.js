@@ -18,6 +18,7 @@ import content from './slices/contentSlice';
 import notifications from './slices/notificationsSlice';
 import lookups from './slices/lookupsSlice';
 import dashboard from './slices/dashboardSlice';
+import requests from './slices/requestsSlice';
 import { hasPermission } from '../permissions';
 
 export const store = configureStore({
@@ -32,6 +33,7 @@ export const store = configureStore({
     notifications,
     lookups,
     dashboard,
+    requests,
   },
   // Picked upload files live in the onboarding state and thunk args.
   middleware: (getDefault) => getDefault({ serializableCheck: false }),

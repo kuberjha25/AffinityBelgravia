@@ -113,9 +113,7 @@ export default function HomeScreen({ navigation, route }) {
             renderItem={({ item }) => (
               <Pressable
                 style={s.banner}
-                onPress={() =>
-                  navigation.navigate(item.project_id ? 'ProjectDetail' : 'Projects', item.project_id ? { id: item.project_id } : undefined)
-                }
+                onPress={() => navigation.navigate('PromotionDetail', { id: item.id })}
               >
                 <Image source={imageSource(item.image_url, images.heroInventory)} style={imageFill} resizeMode="cover" />
                 <LinearGradient colors={['rgba(28,27,25,0)', 'rgba(28,27,25,0.78)']} style={StyleSheet.absoluteFill} />

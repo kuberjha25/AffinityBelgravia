@@ -20,7 +20,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Icon from './Icon';
 import { colors, radius, spacing, type, shadow, borderWidth } from '../theme';
-import { images, states, citiesByState } from '../data';
+import { images } from '../data';
 
 /* ------------------------------------------------------------- Button */
 
@@ -250,52 +250,6 @@ export function SelectField({
   );
 }
 
-/**
- * State then City. The city list only opens once a state is chosen and is
- * limited to that state's cities; changing the state clears the city.
- * `row` lays the pair out side by side, as on the New Lead / Schedule Visit forms.
- */
-export function StateCityFields({ state, city, onChange, row, cityIcon = 'building', stateIcon = 'map', placeholders = {} }) {
-  const cities = state ? citiesByState[state] || [] : [];
-  const statePicker = (
-    <SelectField
-      icon={stateIcon}
-      placeholder={placeholders.state || 'State'}
-      sheetTitle="Select State"
-      value={state}
-      options={states}
-      onChange={(v) => onChange({ state: v, city: v === state ? city : '' })}
-      style={row ? { flex: 1 } : undefined}
-    />
-  );
-  const cityPicker = (
-    <SelectField
-      icon={cityIcon}
-      placeholder={state || row ? placeholders.city || 'City' : 'Select state first'}
-      sheetTitle={state ? `Cities in ${state}` : 'City'}
-      value={city}
-      options={cities}
-      disabled={!state}
-      onChange={(v) => onChange({ state, city: v })}
-      style={row ? { flex: 1 } : undefined}
-    />
-  );
-  if (row) {
-    return (
-      <View style={{ flexDirection: 'row', gap: spacing.md }}>
-        {statePicker}
-        {cityPicker}
-      </View>
-    );
-  }
-  return (
-    <>
-      {statePicker}
-      {cityPicker}
-    </>
-  );
-}
-
 export function SearchBar({ value, onChangeText, placeholder = 'Search by name or phone', onFilterPress, filterCount = 0, style }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -418,7 +372,7 @@ const PILL_TONES = {
 export const toneForStatus = (status = '') => {
   const v = String(status || '').toLowerCase().replace(/[_-]+/g, ' ').trim();
   if (['confirmed', 'completed', 'available', 'converted', 'attended', 'active', 'success', 'approved', 'booked', 'visit completed', 'verified'].includes(v)) return 'success';
-  if (['cancelled', 'sold', 'not interested', 'error', 'rejected', 'closed', 'expired', 'blocked'].includes(v)) return 'error';
+  if (['cancelled', 'sold', 'not interested', 'error', 'rejected', 'closed', 'expired', 'blocked', 'lost', 'urgent'].includes(v)) return 'error';
   if (['pending', 'in progress', 'upcoming', 'scheduled', 'new', 'contacted', 'follow up', 'visit scheduled', 'negotiation', 'hold', 'on hold', 'reserved'].includes(v)) return 'warning';
   return 'neutral';
 };

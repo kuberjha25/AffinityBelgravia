@@ -28,6 +28,10 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import TermsScreen from '../screens/TermsScreen';
 import AboutScreen from '../screens/AboutScreen';
 import GreetingsScreen from '../screens/GreetingsScreen';
+import PromotionDetailScreen from '../screens/PromotionDetailScreen';
+import RequestsScreen from '../screens/RequestsScreen';
+import NewRequestScreen from '../screens/NewRequestScreen';
+import RequestDetailScreen from '../screens/RequestDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -48,6 +52,7 @@ const ProjectsWithTabBar = withMainTabBar(ProjectsScreen);
 const ProjectDetailWithTabBar = withMainTabBar(ProjectDetailScreen);
 const InventoryWithTabBar = withMainTabBar(InventoryScreen);
 const DocumentsWithTabBar = withMainTabBar(DocumentsScreen);
+const RequestsWithTabBar = withMainTabBar(RequestsScreen);
 
 export default function RootNavigator() {
   return (
@@ -89,6 +94,10 @@ export default function RootNavigator() {
       <Stack.Screen name="Terms" component={TermsScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
       <Stack.Screen name="Greetings" component={GreetingsScreen} />
+      <Stack.Screen name="PromotionDetail" component={PromotionDetailScreen} />
+      <Stack.Screen name="Requests" component={RequestsWithTabBar} />
+      <Stack.Screen name="NewRequest" component={NewRequestScreen} />
+      <Stack.Screen name="RequestDetail" component={RequestDetailScreen} />
     </Stack.Navigator>
   );
 }

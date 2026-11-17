@@ -1,12 +1,19 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
 import { SuccessState } from '../components/ui';
 import { colors, spacing, type } from '../theme';
 import { brand, images, thankYou } from '../data';
 
-/** Figma frame: `thank-you-screen` (12:416). */
-export default function ThankYouScreen({ navigation }) {
+/**
+ * Figma frame: `thank-you-screen` (12:416).
+ * `route.params.pending`: the registration awaits Admin approval, so there is
+ * no session — the button goes back to Login instead of the dashboard.
+ */
+export default function ThankYouScreen({ navigation, route }) {
+  const signedIn = useSelector((state) => Boolean(state.auth.token));
+  const pending = route?.params?.pending || !signedIn;
   return (
     <SafeAreaView style={s.root}>
       <View style={s.center}>
@@ -17,9 +24,9 @@ export default function ThankYouScreen({ navigation }) {
         <SuccessState
           title={thankYou.title}
           body={thankYou.body}
-          note={thankYou.note}
-          primaryLabel={thankYou.cta}
-          onPrimary={() => navigation.reset({ index: 0, routes: [{ name: 'Main' }] })}
+          note={pending ? thankYou.pendingNote : thankYou.note}
+          primaryLabel={pending ? thankYou.pendingCta : thankYou.cta}
+          onPrimary={() => navigation.reset({ index: 0, routes: [{ name: pending ? 'Login' : 'Main' }] })}
           secondaryLabel={thankYou.secondary}
           onSecondary={() => navigation.navigate('About')}
         />
