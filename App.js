@@ -13,8 +13,15 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { navigationRef } from './src/navigation/navigationRef';
 import { store } from './src/store';
 import { colors } from './src/theme';
+import { installNotificationHandling } from './src/notificationTaps';
+import { getPushToken } from './src/push';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Push: foreground pushes go to the notification bar; taps open Notifications (or Login).
+installNotificationHandling();
+// Dev only: print the FCM token to Metro at launch, even when signed out, for Firebase console tests.
+if (__DEV__) getPushToken();
 
 /** Deep links — also what the web build uses for its URLs. */
 const linking = {

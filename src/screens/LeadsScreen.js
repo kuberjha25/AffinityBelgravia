@@ -18,7 +18,7 @@ import {
 } from '../components/ui';
 import { colors, spacing, type } from '../theme';
 import { dateFilters, leadTypes } from '../data';
-import { humanize, orDash } from '../format';
+import { humanize, lastFourAadhaar, lastFourMobile, orDash } from '../format';
 import { usePermissions } from '../store';
 import { fetchLeads } from '../store/slices/leadsSlice';
 import { DateRangeRow, useDateFilter } from '../components/DateRange';
@@ -35,7 +35,7 @@ const DEFAULTS = { status: '', type: ALL, source: ALL, date: dateFilters[0].labe
  */
 export default function LeadsScreen({ navigation, route }) {
   const dispatch = useDispatch();
-  const { can } = usePermissions();
+  const { can, isStaff } = usePermissions();
   const canAdd = can('lead.add');
   const list = useSelector((state) => state.leads.list);
   const sources = useLookup('sources');
@@ -147,7 +147,9 @@ export default function LeadsScreen({ navigation, route }) {
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               <View style={{ flex: 1 }}>
                 <Text style={s.name}>{l.full_name}</Text>
-                <Text style={s.phone}>{orDash(l.mobile)}</Text>
+                {/* Frontend users (CP / Broker / …) see only the last 4 digits of mobile and Aadhaar. */}
+                <Text style={s.phone}>{isStaff ? orDash(l.mobile) : lastFourMobile(l.mobile)}</Text>
+                {!isStaff ? <Text style={s.phone}>{`Aadhaar: ${lastFourAadhaar(l.aadhaar_last_four)}`}</Text> : null}
               </View>
               <StatusPill label={humanize(l.status)} tone={toneForStatus(l.status)} />
             </View>

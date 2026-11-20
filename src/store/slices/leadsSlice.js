@@ -26,10 +26,24 @@ export const createLead = apiThunk('leads/create', async (body) => {
   return res.data;
 });
 
+/** PUT /leads/{id} — lead details only. `status` is never sent here (see `updateLeadStatus`). */
 export const updateLead = apiThunk('leads/update', async ({ id, body }, { dispatch }) => {
-  const res = await leadsApi.update(id, body);
+  const { status: _status, ...details } = body || {};
+  const res = await leadsApi.update(id, details);
   dispatch(fetchLead(id));
   return res.data;
+});
+
+/**
+ * PATCH /leads/{id}/status `{ status, remarks }`. The response carries only
+ * `{ id, status, remarks }`, which the reducer merges into the cached detail
+ * and list rows; the detail is then refetched quietly so History shows the change.
+ */
+export const updateLeadStatus = apiThunk('leads/updateStatus', async ({ id, status, remarks }, { dispatch }) => {
+  const res = await leadsApi.updateStatus(id, { status, remarks });
+  const d = res.data || {};
+  dispatch(fetchLead(id));
+  return { id: d.id ?? id, status: d.status ?? status, remarks: d.remarks ?? remarks };
 });
 
 /**
@@ -59,6 +73,19 @@ const markStale = (state) => {
   state.list.stale = true;
 };
 
+/** Merges `{ id, status, remarks }` into every cached copy of that lead. */
+const mergeStatus = (state, { payload, meta }) => {
+  const changes = { status: payload.status, remarks: payload.remarks };
+  // Details are cached under the id the screen used (route param), which may be a string.
+  [meta.arg.id, payload.id].forEach((key) => {
+    if (state.details[key]) Object.assign(state.details[key], changes);
+  });
+  state.list.items.forEach((item) => {
+    if (String(item.id) === String(payload.id)) Object.assign(item, changes);
+  });
+  state.list.stale = true; // status filters and counts may have changed
+};
+
 const leadsSlice = createSlice({
   name: 'leads',
   initialState,
@@ -70,6 +97,7 @@ const leadsSlice = createSlice({
     builder
       .addCase(createLead.fulfilled, markStale)
       .addCase(updateLead.fulfilled, markStale)
+      .addCase(updateLeadStatus.fulfilled, mergeStatus)
       .addCase(addFollowup.fulfilled, markStale)
       .addCase(completeFollowup.fulfilled, markStale);
   },

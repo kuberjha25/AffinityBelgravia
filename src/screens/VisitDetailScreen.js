@@ -15,7 +15,7 @@ import {
   ErrorState,
 } from '../components/ui';
 import { colors, radius, spacing, type } from '../theme';
-import { fromApiDate, humanize, isMasked, orDash } from '../format';
+import { fromApiDate, humanize, isMasked, lastFourAadhaar, lastFourMobile, orDash } from '../format';
 import { usePermissions } from '../store';
 import { attendVisit, fetchVisit } from '../store/slices/visitsSlice';
 
@@ -26,7 +26,7 @@ export default function VisitDetailScreen({ route }) {
   const visit = useSelector((state) => state.visits.details[id]);
   const status = useSelector((state) => state.visits.detailsStatus[id]);
   const error = useSelector((state) => state.visits.detailsError[id]);
-  const { can } = usePermissions();
+  const { can, isStaff } = usePermissions();
   const [remarks, setRemarks] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -63,7 +63,9 @@ export default function VisitDetailScreen({ route }) {
     }
   };
 
-  const callable = visit.mobile && !isMasked(visit.mobile);
+  // Frontend users (CP / Broker / …) see only the last 4 digits of the visitor's mobile and Aadhaar.
+  const callable = isStaff && visit.mobile && !isMasked(visit.mobile);
+  const aadhaar = visit.aadhaar_last_four ?? visit.lead?.aadhaar_last_four;
   const mailable = visit.email && !isMasked(visit.email);
 
   return (
@@ -87,9 +89,15 @@ export default function VisitDetailScreen({ route }) {
               >
                 <Icon name="phone" size={16} color={colors.brandPrimary} />
                 <Text style={[s.contact, callable && { color: colors.brandPrimary }]} numberOfLines={1}>
-                  {orDash(visit.mobile)}
+                  {isStaff ? orDash(visit.mobile) : lastFourMobile(visit.mobile)}
                 </Text>
               </Pressable>
+              {!isStaff ? (
+                <View style={s.inline}>
+                  <Icon name="hash" size={16} color={colors.brandPrimary} />
+                  <Text style={s.contact} numberOfLines={1}>{`Aadhaar ${lastFourAadhaar(aadhaar)}`}</Text>
+                </View>
+              ) : null}
               <Pressable
                 style={s.inline}
                 disabled={!mailable}

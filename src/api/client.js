@@ -72,6 +72,7 @@ const toQuery = (params) => {
 
 /**
  * `request('/leads', { params: { page: 2 } })` → parsed JSON body.
+ * `method`: GET | POST | PUT | PATCH | DELETE.
  * `body` may be a plain object (sent as JSON) or a FormData (multipart).
  * `auth: false` for the public endpoints.
  */

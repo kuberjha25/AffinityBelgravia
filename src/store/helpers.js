@@ -3,7 +3,11 @@ import { createAction, createAsyncThunk } from '@reduxjs/toolkit';
 /** Clears every slice (logout / expired session). */
 export const resetApp = createAction('app/reset');
 
-/** createAsyncThunk whose rejection payload is the API's human-readable message. */
+/**
+ * createAsyncThunk whose rejection payload is the API's human-readable message.
+ * Laravel 422 field errors (`{ field: [msg] }`) ride along on the rejected
+ * action as `action.meta.fieldErrors` for forms that show them inline.
+ */
 export const apiThunk = (type, fn, options) =>
   createAsyncThunk(
     type,
@@ -11,7 +15,9 @@ export const apiThunk = (type, fn, options) =>
       try {
         return await fn(arg, api);
       } catch (e) {
-        return api.rejectWithValue(e?.message || 'Something went wrong. Please try again.');
+        return api.rejectWithValue(e?.message || 'Something went wrong. Please try again.', {
+          fieldErrors: e?.errors || null,
+        });
       }
     },
     options

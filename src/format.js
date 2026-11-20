@@ -62,6 +62,24 @@ export const orDash = (value) => {
 /** The backend masks mobile/email for some roles ("98******17"); never dial or mail those. */
 export const isMasked = (value) => String(value || '').includes('*');
 
+/**
+ * Mobile as shown to frontend users (CP / Broker / …): only the last 4 digits,
+ * "XXXXXX3210". If the backend already masked the end ("98******17") the last
+ * 4 can't be known, so its value is shown as-is. Empty → "—".
+ */
+export const lastFourMobile = (value) => {
+  const raw = String(value || '').replace(/[\s-]/g, '');
+  if (!raw || orDash(raw) === '—') return '—';
+  const tail = raw.slice(-4);
+  return /^\d{4}$/.test(tail) ? `XXXXXX${tail}` : raw;
+};
+
+/** Aadhaar last 4 digits (`aadhaar_last_four`) → "XXXX XXXX 1234"; missing → "—". */
+export const lastFourAadhaar = (value) => {
+  const d = String(value ?? '').replace(/\D/g, '').slice(-4);
+  return d.length === 4 ? `XXXX XXXX ${d}` : '—';
+};
+
 /** Absolute URL for a file path relative to /storage (absolute URLs pass through). */
 export const storageUrl = (path) => {
   if (!path) return null;

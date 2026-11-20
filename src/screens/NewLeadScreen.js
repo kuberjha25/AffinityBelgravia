@@ -6,7 +6,7 @@ import Icon from '../components/Icon';
 import { TextField, SelectField, PrimaryButton } from '../components/ui';
 import StateCityFields from '../components/StateCityFields';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { leadTypes } from '../data';
+import { aadhaarRequired, leadTypes } from '../data';
 import { digits, isMasked } from '../format';
 import LeadSourceFields, { validateLeadSource } from '../components/LeadSourceFields';
 import { createLead, updateLead } from '../store/slices/leadsSlice';
@@ -15,6 +15,11 @@ import { useLookup } from '../hooks';
 import { usePermissions } from '../store';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const AADHAAR_LAST_FOUR = /^\d{4}$/;
+
+/** API field → form key, for showing Laravel 422 errors under the right input. */
+const API_FIELD = { full_name: 'fullName', email: 'email', mobile: 'mobile', aadhaar_last_four: 'aadhaar' };
+const firstMsg = (v) => (Array.isArray(v) ? String(v[0] || '') : String(v || ''));
 
 const TYPE_TONE = {
   hot: { fg: colors.error, bg: 'rgba(180,83,74,0.06)' },
@@ -34,11 +39,13 @@ export default function NewLeadScreen({ navigation, route }) {
   const categories = useLookup('categories');
   const { isStaff } = usePermissions();
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState(() => ({
     fullName: editing?.full_name || '',
     email: editing?.email && !isMasked(editing.email) ? editing.email : '',
     mobile: editing?.mobile && !isMasked(editing.mobile) ? digits(editing.mobile, 10) : '',
+    aadhaar: editing?.aadhaar_last_four ? digits(String(editing.aadhaar_last_four), 4) : '',
     source: editing?.source || '',
     partner: null,
     categoryId: null,
@@ -50,7 +57,11 @@ export default function NewLeadScreen({ navigation, route }) {
     type: editing?.lead_type || 'warm',
     remarks: editing?.remarks || '',
   }));
-  const patch = (p) => setForm((f) => ({ ...f, ...p }));
+  const patch = (p) => {
+    setForm((f) => ({ ...f, ...p }));
+    // Editing a field clears its error.
+    setErrors((e) => (Object.keys(p).some((k) => e[k]) ? { ...e, ...Object.fromEntries(Object.keys(p).map((k) => [k, undefined])) } : e));
+  };
   const set = (key) => (value) => patch({ [key]: value });
 
   useEffect(() => {
@@ -86,11 +97,20 @@ export default function NewLeadScreen({ navigation, route }) {
       Alert.alert('Email address', 'Please enter a valid email address.');
       return;
     }
+    if ((aadhaarRequired || form.aadhaar) && !AADHAAR_LAST_FOUR.test(form.aadhaar)) {
+      setErrors((e) => ({
+        ...e,
+        aadhaar: form.aadhaar ? 'Enter exactly 4 digits.' : 'Last 4 digits of Aadhaar are required.',
+      }));
+      Alert.alert('Aadhaar', 'Please enter the last 4 digits of the customer’s Aadhaar.');
+      return;
+    }
 
     const body = {
       full_name: form.fullName.trim(),
       mobile: form.mobile || undefined,
       email: form.email.trim() || undefined,
+      aadhaar_last_four: form.aadhaar || undefined,
       lead_type: form.type,
       source: form.source || undefined,
       unit_category: form.categoryId || undefined,
@@ -103,14 +123,29 @@ export default function NewLeadScreen({ navigation, route }) {
     };
 
     setSaving(true);
+    setErrors({});
+    /** Runs the thunk; on a 422 puts field errors under their inputs, then rethrows the message. */
+    const save = async (thunk, arg) => {
+      const action = await dispatch(thunk(arg));
+      if (thunk.rejected.match(action)) {
+        const fe = action.meta.fieldErrors || {};
+        const mapped = {};
+        Object.entries(fe).forEach(([k, v]) => {
+          if (API_FIELD[k]) mapped[API_FIELD[k]] = firstMsg(v);
+        });
+        if (Object.keys(mapped).length) setErrors(mapped);
+        throw action.payload;
+      }
+      return action.payload;
+    };
     try {
       if (editing) {
-        await dispatch(updateLead({ id: editing.id, body })).unwrap();
+        await save(updateLead, { id: editing.id, body });
         Alert.alert('Lead updated', `${body.full_name}'s details have been saved.`, [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
       } else {
-        const created = await dispatch(createLead({ ...body, partner_id: isStaff ? form.partner?.id : undefined })).unwrap();
+        const created = await save(createLead, { ...body, partner_id: isStaff ? form.partner?.id : undefined });
         Alert.alert('Lead submitted', `${body.full_name} has been added to your leads.`, [
           {
             text: 'OK',
@@ -135,13 +170,23 @@ export default function NewLeadScreen({ navigation, route }) {
       <View style={{ paddingHorizontal: spacing.xl }}>
         <Text style={s.group}>Details</Text>
         <View style={{ gap: spacing.md }}>
-          <TextField icon="user" placeholder="Full Name" value={form.fullName} onChangeText={set('fullName')} maxLength={200} />
-          <TextField icon="mail" placeholder="Email Address" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" />
+          <TextField icon="user" placeholder="Full Name" value={form.fullName} onChangeText={set('fullName')} maxLength={200} error={errors.fullName} />
+          <TextField icon="mail" placeholder="Email Address" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" error={errors.email} />
           <LeadSourceFields
             form={form}
             onChange={patch}
             showReferrer={isStaff && !editing}
             mobilePlaceholder={editing ? 'Mobile (leave blank to keep current)' : undefined}
+          />
+          {errors.mobile ? <Text style={s.fieldError}>{errors.mobile}</Text> : null}
+          <TextField
+            icon="hash"
+            placeholder={aadhaarRequired ? 'Aadhaar – last 4 digits' : 'Aadhaar – last 4 digits (optional)'}
+            value={form.aadhaar}
+            onChangeText={(v) => set('aadhaar')(digits(v, 4))}
+            keyboardType="number-pad"
+            maxLength={4}
+            error={errors.aadhaar}
           />
         </View>
 
@@ -218,6 +263,7 @@ export default function NewLeadScreen({ navigation, route }) {
 }
 
 const s = StyleSheet.create({
+  fieldError: { ...type.caption, color: colors.onErrorSoft, marginTop: -spacing.xs },
   group: { ...type.bodySmall, color: colors.muted, marginTop: spacing.xl, marginBottom: spacing.md },
   typeChip: {
     flex: 1,

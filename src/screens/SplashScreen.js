@@ -6,10 +6,15 @@ import { useDispatch } from 'react-redux';
 import { colors, spacing, type } from '../theme';
 import { brand, images } from '../data';
 import { bootstrapSession } from '../store/slices/authSlice';
+import { checkLaunchNotification, consumePendingTap } from '../notificationTaps';
 
 const MIN_SPLASH_MS = 1500;
 
-/** Figma frame: `splash-light` (12:2). Restores a saved session, else goes to Login. */
+/**
+ * Figma frame: `splash-light` (12:2). Restores a saved session, else goes to Login.
+ * If the app was opened by tapping a notification: signed in → Main + Notifications;
+ * signed out → Login (the tap is dropped, so login lands on Main as usual).
+ */
 export default function SplashScreen({ navigation }) {
   const dispatch = useDispatch();
   const fade = React.useRef(new Animated.Value(0)).current;
@@ -23,10 +28,15 @@ export default function SplashScreen({ navigation }) {
 
     let cancelled = false;
     const wait = new Promise((resolve) => setTimeout(resolve, MIN_SPLASH_MS));
-    Promise.all([dispatch(bootstrapSession()), wait]).then(([action]) => {
+    Promise.all([dispatch(bootstrapSession()), wait, checkLaunchNotification()]).then(([action]) => {
       if (cancelled) return;
       const signedIn = Boolean(action.payload?.token);
-      navigation.reset({ index: 0, routes: [{ name: signedIn ? 'Main' : 'Login' }] });
+      const tapped = consumePendingTap();
+      if (signedIn && tapped) {
+        navigation.reset({ index: 1, routes: [{ name: 'Main' }, { name: 'Notifications' }] });
+      } else {
+        navigation.reset({ index: 0, routes: [{ name: signedIn ? 'Main' : 'Login' }] });
+      }
     });
     return () => {
       cancelled = true;

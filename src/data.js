@@ -77,6 +77,15 @@ export const leadStatusesFallback = [
   { id: 'lost', name: 'Lost' },
 ];
 
+/**
+ * `aadhaar_last_four` on lead create/update is required by the backend for
+ * Affinity and CountyGreen only (not Meraqui). This app is Affinity → true.
+ */
+export const aadhaarRequired = true;
+
+/** Statuses accepted by PATCH /leads/{id}/status — anything else is rejected with a 422. */
+export const leadStatusUpdateValues = ['contacted', 'negotiation', 'booked', 'expired', 'converted', 'lost'];
+
 /** Activities offered on the Add Follow-up form (free text on the backend). */
 export const followUpActivities = ['Follow Up Call', 'Meeting', 'Site Visit', 'WhatsApp', 'Email'];
 

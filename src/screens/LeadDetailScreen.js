@@ -19,10 +19,10 @@ import {
 } from '../components/ui';
 import { formatDate } from '../components/DateField';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
-import { followUpActivities, leadTypes } from '../data';
-import { fromApiDate, humanize, isMasked, orDash, rupees, timeLabel, toApiDate } from '../format';
+import { followUpActivities, leadStatusesFallback, leadStatusUpdateValues, leadTypes } from '../data';
+import { fromApiDate, humanize, isMasked, lastFourAadhaar, lastFourMobile, orDash, rupees, timeLabel, toApiDate } from '../format';
 import { usePermissions } from '../store';
-import { addFollowup, completeFollowup, fetchLead, updateLead } from '../store/slices/leadsSlice';
+import { addFollowup, completeFollowup, fetchLead, updateLeadStatus } from '../store/slices/leadsSlice';
 import { useLeadStatuses } from '../hooks';
 
 /** Half-hour follow-up times, 9 AM – 8 PM, sent as "HH:mm". */
@@ -61,6 +61,7 @@ export default function LeadDetailScreen({ navigation, route }) {
   const [dialog, setDialog] = useState(null);
   const [saving, setSaving] = useState(false);
   const [statusDraft, setStatusDraft] = useState({ status: '', remarks: '' });
+  const [statusErrors, setStatusErrors] = useState({});
   const [followDraft, setFollowDraft] = useState(blankFollowUp);
   const [completeRemarks, setCompleteRemarks] = useState('');
 
@@ -98,16 +99,34 @@ export default function LeadDetailScreen({ navigation, route }) {
 
   const openStatus = () => {
     setStatusDraft({ status: '', remarks: '' });
+    setStatusErrors({});
     setDialog('status');
   };
 
-  /** PUT /leads/{id} with `status` — `remarks` are mandatory (min 3 characters). */
-  const saveStatus = () => {
-    if (!statusDraft.status) return Alert.alert('Select status', 'Please choose the new status.');
-    if (statusDraft.remarks.trim().length < 3) {
-      return Alert.alert('Remarks required', 'Please add remarks (at least 3 characters) for this change.');
+  /** PATCH /leads/{id}/status — `status` from the allowed list, `remarks` min 3 characters. */
+  const saveStatus = async () => {
+    const remarks = statusDraft.remarks.trim();
+    const errors = {};
+    if (!statusDraft.status) errors.status = 'Please choose the new status.';
+    else if (!leadStatusUpdateValues.includes(statusDraft.status)) errors.status = 'This status cannot be set here.';
+    if (remarks.length < 3) errors.remarks = 'Remarks must be at least 3 characters.';
+    setStatusErrors(errors);
+    if (Object.keys(errors).length) return;
+
+    setSaving(true);
+    try {
+      const action = await dispatch(updateLeadStatus({ id, status: statusDraft.status, remarks }));
+      if (updateLeadStatus.rejected.match(action)) {
+        const fe = action.meta.fieldErrors || {};
+        const first = (v) => (Array.isArray(v) ? v[0] : v) || undefined;
+        if (fe.status || fe.remarks) setStatusErrors({ status: first(fe.status), remarks: first(fe.remarks) });
+        else Alert.alert('Could not update status', String(action.payload));
+        return;
+      }
+      close();
+    } finally {
+      setSaving(false);
     }
-    return run(updateLead({ id: lead.id, body: { status: statusDraft.status, remarks: statusDraft.remarks.trim() } }));
   };
 
   const openFollowUp = () => {
@@ -140,11 +159,20 @@ export default function LeadDetailScreen({ navigation, route }) {
   };
 
   const nextFollowUp = /^\d{4}-\d{2}-\d{2}/.test(lead.next_follow_up || '') ? fromApiDate(lead.next_follow_up) : lead.next_follow_up;
-  const callable = lead.mobile && !isMasked(lead.mobile);
+  // Frontend users (CP / Broker / …) see only the last 4 digits of the customer's mobile and Aadhaar.
+  const mobileText = isStaff ? orDash(lead.mobile) : lastFourMobile(lead.mobile);
+  const callable = isStaff && lead.mobile && !isMasked(lead.mobile);
   const mailable = lead.email && !isMasked(lead.email);
   const history = lead.history || [];
-  const statusOptions = statusChoices.filter((st) => st.id !== lead.status).map((st) => ({ label: st.label, value: st.id }));
-  const statusLabel = statusChoices.find((st) => st.id === statusDraft.status)?.label || '';
+  // Only the statuses PATCH /leads/{id}/status accepts; fall back to the local list if the API gave none of them.
+  const allowedChoices = statusChoices.filter((st) => leadStatusUpdateValues.includes(st.id));
+  const statusSource = allowedChoices.length
+    ? allowedChoices
+    : statusChoices.length
+      ? leadStatusesFallback.map((st) => ({ id: st.id, label: st.name }))
+      : [];
+  const statusOptions = statusSource.filter((st) => st.id !== lead.status).map((st) => ({ label: st.label, value: st.id }));
+  const statusLabel = statusSource.find((st) => st.id === statusDraft.status)?.label || '';
   const canRaiseRequest = !isStaff && lead.status === 'converted';
   const task = dialog?.complete;
 
@@ -168,9 +196,10 @@ export default function LeadDetailScreen({ navigation, route }) {
             <ContactRow
               icon="phone"
               label="Mobile"
-              value={orDash(lead.mobile)}
+              value={mobileText}
               onPress={callable ? () => Linking.openURL(`tel:${lead.mobile}`) : undefined}
             />
+            {!isStaff ? <ContactRow icon="hash" label="Aadhaar (last 4)" value={lastFourAadhaar(lead.aadhaar_last_four)} /> : null}
             {lead.email ? (
               <ContactRow
                 icon="mail"
@@ -285,7 +314,7 @@ export default function LeadDetailScreen({ navigation, route }) {
                 label="Raise Request"
                 icon="notepad-text"
                 onPress={() =>
-                  navigation.navigate('NewRequest', { remarks: `Lead: ${lead.full_name} (${lead.mobile || ''})\n` })
+                  navigation.navigate('NewRequest', { remarks: `Lead: ${lead.full_name} (${mobileText})\n` })
                 }
               />
             ) : null}
@@ -301,13 +330,21 @@ export default function LeadDetailScreen({ navigation, route }) {
           value={statusLabel}
           placeholder={statusOptions.length ? 'Select status' : 'Loading statuses…'}
           options={statusOptions}
-          onChange={(v) => setStatusDraft((d) => ({ ...d, status: v }))}
+          onChange={(v) => {
+            setStatusDraft((d) => ({ ...d, status: v }));
+            setStatusErrors((e) => ({ ...e, status: undefined }));
+          }}
+          error={statusErrors.status}
         />
         <TextField
-          label="Remarks (required)"
+          label="Remarks (required, min 3 characters)"
           placeholder="Why is the status changing?"
           value={statusDraft.remarks}
-          onChangeText={(v) => setStatusDraft((d) => ({ ...d, remarks: v }))}
+          onChangeText={(v) => {
+            setStatusDraft((d) => ({ ...d, remarks: v }));
+            if (statusErrors.remarks && v.trim().length >= 3) setStatusErrors((e) => ({ ...e, remarks: undefined }));
+          }}
+          error={statusErrors.remarks}
           multiline
           maxLength={500}
         />

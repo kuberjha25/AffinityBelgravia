@@ -77,7 +77,15 @@ export const leadsApi = {
   list: (params) => request('/leads', { params }),
   create: (body) => request('/leads', { method: 'POST', body }),
   detail: (id) => request(`/leads/${id}`),
+  /** Lead details only (incl. `aadhaar_last_four`). Never send `status` here — use `updateStatus`. */
   update: (id, body) => request(`/leads/${id}`, { method: 'PUT', body }),
+  /**
+   * PATCH /leads/{id}/status `{ status, remarks }` — status is one of
+   * `leadStatusUpdateValues` (src/data.js); remarks min 3 characters.
+   * Response `data` is just `{ id, status, remarks }`.
+   */
+  updateStatus: (id, { status, remarks }) =>
+    request(`/leads/${id}/status`, { method: 'PATCH', body: { status, remarks } }),
   addFollowup: (id, body) => request(`/leads/${id}/followups`, { method: 'POST', body }),
   completeFollowup: (id, followupId, completionRemarks) =>
     request(`/leads/${id}/followups/${followupId}/complete`, {
