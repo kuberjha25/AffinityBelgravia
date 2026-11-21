@@ -1,75 +1,69 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Alert } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import KeyboardActionBar, { ACTION_BAR_HEIGHT } from '../components/KeyboardActionBar';
-import Icon from '../components/Icon';
-import { useRegistrationSubmit } from '../components/RegistrationSubmit';
-import { WizardHeader, TextField, SelectField, PrimaryButton, LoadingState, ErrorState } from '../components/ui';
-import { colors, radius, spacing, type, borderWidth } from '../theme';
+import { WizardHeader, TextField, SelectField, PrimaryButton } from '../components/ui';
+import { colors, spacing, type } from '../theme';
 import { businessTypesFallback } from '../data';
-import { patchOnboarding, setDocument } from '../store/slices/onboardingSlice';
-import { fetchKeyedLookup } from '../store/slices/lookupsSlice';
+import { patchOnboarding, setRequiredDocs } from '../store/slices/onboardingSlice';
 import { useKeyedLookup, useLookup } from '../hooks';
-
-const MAX_BYTES = 5 * 1024 * 1024;
-const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+import { useRegistrationSubmit } from '../components/RegistrationSubmit';
+import { readRegistrationErrors, screenForField } from '../registrationErrors';
 
 /**
- * Figma frame: `channel-partner-details` (12:292) — wizard step 3, channel partners only.
- * Business types come from GET /business-types (bundled copy if that fails);
- * the documents — and which are mandatory — from GET /cp-documents for the
- * chosen type, reloaded whenever the type changes (#7).
- * The lists for every business type are fetched as soon as the screen opens,
- * so the documents (optional ones included) are visible straight away; until a
- * type is chosen they are shown merged, with the types that require each one.
+ * Figma frame: `channel-partner-details` (12:292) — wizard step 3 of 4, channel partners only.
+ * Company details and business type (GET /business-types, bundled copy if that fails).
+ *
+ * "Submit" sends the registration as before. The API answers a missing
+ * document with a 422 (`documents.<field_key>` … required); that isn't shown
+ * as an error — the partner goes to Upload Documents with exactly those
+ * documents marked Required. Any other validation error is shown here. If the
+ * API needs no documents, the registration simply completes.
  */
 export default function ChannelPartnerDetailsScreen({ navigation }) {
   const dispatch = useDispatch();
   const onboarding = useSelector((state) => state.onboarding);
   const businessTypes = useLookup('businessTypes');
   const [business, setBusiness] = useState(onboarding.business);
-  const cpDocuments = useKeyedLookup('cpDocuments', business.businessType);
+  // Start loading the chosen type's documents so the next screen opens with them.
+  useKeyedLookup('cpDocuments', business.businessType);
   const allCpDocuments = useSelector((state) => state.lookups.cpDocuments);
-  const { submit, submitting, dialog } = useRegistrationSubmit(navigation);
+
+  const onError = (message, fieldErrors) => {
+    const known = [];
+    Object.values(allCpDocuments).forEach((entry) =>
+      (entry?.items || []).forEach((d) => {
+        if (!known.some((k) => k.field_key === d.field_key)) known.push(d);
+      })
+    );
+    const { docs, others } = readRegistrationErrors(message, fieldErrors, known);
+    if (others.length) {
+      const screen = screenForField(others[0].key);
+      Alert.alert(
+        'Could not submit',
+        others.map((o) => o.message).join('\n'),
+        screen && screen !== 'ChannelPartnerDetails'
+          ? [
+              { text: 'OK', style: 'cancel' },
+              { text: 'Edit details', onPress: () => navigation.navigate(screen) },
+            ]
+          : undefined
+      );
+      return true;
+    }
+    if (Object.keys(docs).length) {
+      dispatch(setRequiredDocs(docs));
+      navigation.navigate('UploadDocuments');
+      return true;
+    }
+    return false;
+  };
+  const { submit, submitting, dialog } = useRegistrationSubmit(navigation, { onError });
 
   const set = (key) => (value) => setBusiness((b) => ({ ...b, [key]: value }));
   const upper = (key) => (value) => set(key)(value.toUpperCase());
-
-  const choose = async (doc) => {
-    try {
-      const res = await DocumentPicker.getDocumentAsync({ type: FILE_TYPES, copyToCacheDirectory: true });
-      const asset = res.canceled ? null : res.assets?.[0];
-      if (!asset) return;
-      if (asset.size && asset.size > MAX_BYTES) {
-        Alert.alert('File too large', 'Each document must be 5 MB or smaller.');
-        return;
-      }
-      dispatch(
-        setDocument({
-          key: doc.field_key,
-          file: { uri: asset.uri, name: asset.name, type: asset.mimeType || 'application/octet-stream', file: asset.file },
-        })
-      );
-    } catch {
-      Alert.alert('Upload failed', 'Could not open the file picker. Please try again.');
-    }
-  };
-
-  const pickDocument = (doc) => {
-    const current = onboarding.documents[doc.field_key];
-    if (!current) {
-      choose(doc);
-      return;
-    }
-    Alert.alert(doc.name, current.name, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => dispatch(setDocument({ key: doc.field_key, file: null })) },
-      { text: 'Replace', onPress: () => choose(doc) },
-    ]);
-  };
 
   const onSubmit = () => {
     if (!business.companyName.trim()) {
@@ -80,17 +74,8 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
       Alert.alert('Business type', 'Please select the business type.');
       return;
     }
-    if (cpDocuments.status !== 'succeeded') {
-      Alert.alert('Documents', cpDocuments.status === 'failed'
-        ? 'Couldn’t load the required documents. Please retry.'
-        : 'Loading the required documents, please wait.');
-      return;
-    }
-    const missing = (cpDocuments.items || []).filter((d) => d.is_mandatory && !onboarding.documents[d.field_key]);
-    if (missing.length) {
-      Alert.alert('Required documents', `Please upload: ${missing.map((d) => d.name).join(', ')}`);
-      return;
-    }
+    // The API's answer decides which documents are required, fresh each time.
+    dispatch(setRequiredDocs(null));
     dispatch(patchOnboarding({ business }));
     submit();
   };
@@ -102,44 +87,6 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
       : [];
   const typeOptions = typeRows.map((b) => ({ label: b.name, value: b.slug }));
   const businessLabel = typeOptions.find((b) => b.value === business.businessType)?.label || '';
-  const typeSlugs = typeOptions.map((t) => t.value).join(',');
-
-  // Prefetch the document list of every business type (cached per type).
-  useEffect(() => {
-    typeSlugs
-      .split(',')
-      .filter(Boolean)
-      .forEach((key) => dispatch(fetchKeyedLookup({ name: 'cpDocuments', key })));
-  }, [dispatch, typeSlugs]);
-
-  // Before a type is chosen: every document any type asks for, tagged with
-  // the types that make it mandatory.
-  const mergedDocs = [];
-  const seen = {};
-  typeOptions.forEach((t) => {
-    (allCpDocuments[t.value]?.items || []).forEach((d) => {
-      if (!seen[d.field_key]) {
-        seen[d.field_key] = { ...d, requiredFor: [] };
-        mergedDocs.push(seen[d.field_key]);
-      }
-      if (d.is_mandatory) seen[d.field_key].requiredFor.push(t.label);
-    });
-  });
-  const mergedLoading =
-    !business.businessType &&
-    !mergedDocs.length &&
-    (businessTypes.status === 'loading' ||
-      typeOptions.some((t) => ['loading', 'idle', undefined].includes(allCpDocuments[t.value]?.status)));
-
-  const docs = business.businessType ? cpDocuments.items || [] : mergedDocs;
-  const docsLoading = business.businessType
-    ? cpDocuments.status === 'loading' || cpDocuments.status === 'idle'
-    : mergedLoading;
-  const docTag = (doc) => {
-    if (business.businessType) return doc.is_mandatory ? 'Required' : 'Optional';
-    return doc.requiredFor?.length ? `Required for ${doc.requiredFor.join(', ')}` : 'Optional';
-  };
-  const docRequired = (doc) => (business.businessType ? doc.is_mandatory : doc.requiredFor?.length > 0);
 
   return (
     <SafeAreaView edges={['top']} style={s.root}>
@@ -151,9 +98,9 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
       >
         <WizardHeader
           step={3}
-          total={3}
+          total={4}
           title={onboarding.mode === 'admin' ? 'Register Partner' : 'Complete Profile'}
-          subtitle="Please provide your company details and upload required documents."
+          subtitle="Please provide your company details."
           onBack={() => navigation.goBack()}
         />
 
@@ -186,53 +133,11 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
             <TextField icon="file-text" label="MSME / Udyam Number" placeholder="Optional" value={business.msmeNumber} onChangeText={upper('msmeNumber')} autoCapitalize="characters" />
           </View>
 
-          <Text style={[s.groupLabel, { marginTop: spacing.xl }]}>Upload Documents</Text>
-          <Text style={s.hint}>JPG, PNG or PDF, up to 5 MB each.</Text>
-
-          {!business.businessType && docs.length ? (
-            <Text style={s.hint}>Select the business type to confirm which documents are required.</Text>
-          ) : null}
-          {!business.businessType && !docs.length && !docsLoading ? (
-            <Text style={s.hint}>Select the business type to see the documents required.</Text>
-          ) : null}
-          {docsLoading ? <LoadingState /> : null}
-          {business.businessType && cpDocuments.status === 'failed' ? <ErrorState message={cpDocuments.error} onRetry={cpDocuments.reload} /> : null}
-          {business.businessType && cpDocuments.status === 'succeeded' && cpDocuments.items.length === 0 ? (
-            <Text style={s.hint}>No documents are required at the moment.</Text>
-          ) : null}
-
-          <View style={{ gap: spacing.md }}>
-            {docs.map((doc) => {
-              const file = onboarding.documents[doc.field_key];
-              return (
-                <View key={doc.field_key} style={s.docRow}>
-                  <View style={s.docIcon}>
-                    <Icon name="file-text" size={18} color={colors.brandPrimary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.docTitle}>{doc.name}</Text>
-                    {file ? <Text style={s.docHint} numberOfLines={1}>{file.name}</Text> : null}
-                    <Text style={[s.docTag, docRequired(doc) && { color: colors.error }]}>{docTag(doc)}</Text>
-                  </View>
-                  <Pressable onPress={() => pickDocument(doc)} style={[s.uploadBtn, file && s.uploadBtnDone]}>
-                    <Icon
-                      name={file ? 'check' : 'upload'}
-                      size={13}
-                      color={file ? colors.onBrand : colors.brandPrimary}
-                      strokeWidth={file ? 2 : undefined}
-                    />
-                    <Text style={[s.uploadLabel, file && { color: colors.onBrand }]}>{file ? 'Added' : 'Upload'}</Text>
-                  </Pressable>
-                </View>
-              );
-            })}
-          </View>
-
-          <PrimaryButton label="Submit Application" onPress={onSubmit} loading={submitting} style={{ marginTop: spacing.xl }} />
+          <PrimaryButton label="Submit" onPress={onSubmit} loading={submitting} style={{ marginTop: spacing.xl }} />
         </View>
       </KeyboardAwareScrollView>
       <KeyboardActionBar>
-        <PrimaryButton label="Submit Application" onPress={onSubmit} loading={submitting} />
+        <PrimaryButton label="Submit" onPress={onSubmit} loading={submitting} />
       </KeyboardActionBar>
       {dialog}
     </SafeAreaView>
@@ -245,46 +150,6 @@ const s = StyleSheet.create({
   body: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
 
   groupLabel: { ...type.bodySmall, color: colors.muted, marginBottom: spacing.md },
-  hint: { ...type.caption, color: colors.muted, marginTop: -spacing.sm, marginBottom: spacing.md },
   warn: { ...type.caption, color: colors.error, marginTop: -spacing.xs },
 
-  docRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surfaceSecondary,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.default,
-    borderColor: colors.border,
-    padding: spacing.md,
-  },
-  docIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    backgroundColor: colors.glassTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  docTitle: { ...type.bodySmall, color: colors.onSurface },
-  docHint: { ...type.caption, color: colors.muted, marginTop: 2 },
-  docTag: { ...type.caption, fontSize: 11, color: colors.muted, marginTop: 2 },
-
-  uploadBtn: {
-    height: 32,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.default,
-    borderColor: colors.brandPrimary,
-    borderStyle: 'dashed',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  uploadBtnDone: {
-    backgroundColor: colors.brandPrimary,
-    borderColor: colors.brandPrimary,
-    borderStyle: 'solid',
-  },
-  uploadLabel: { ...type.caption, color: colors.brandPrimary },
 });

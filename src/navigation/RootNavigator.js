@@ -9,6 +9,7 @@ import OtpScreen from '../screens/OtpScreen';
 import CompleteProfileScreen from '../screens/CompleteProfileScreen';
 import ProfileStepTwoScreen from '../screens/ProfileStepTwoScreen';
 import ChannelPartnerDetailsScreen from '../screens/ChannelPartnerDetailsScreen';
+import UploadDocumentsScreen from '../screens/UploadDocumentsScreen';
 import ThankYouScreen from '../screens/ThankYouScreen';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -67,6 +68,7 @@ export default function RootNavigator() {
       <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
       <Stack.Screen name="ProfileStepTwo" component={ProfileStepTwoScreen} />
       <Stack.Screen name="ChannelPartnerDetails" component={ChannelPartnerDetailsScreen} />
+      <Stack.Screen name="UploadDocuments" component={UploadDocumentsScreen} />
       <Stack.Screen name="ThankYou" component={ThankYouScreen} options={{ animation: 'fade' }} />
 
       {/* Main app */}

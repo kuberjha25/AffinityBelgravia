@@ -3,8 +3,12 @@
  * "01 Components / Affinity Belgravia — Light Luxury Components".
  * Every size, radius, border and colour comes from the tokens in theme.js.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Dimensions,
+  FlatList,
+  Keyboard,
+  useWindowDimensions,
   View,
   Text,
   TextInput,
@@ -18,6 +22,7 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from './Icon';
 import { colors, radius, spacing, type, shadow, borderWidth } from '../theme';
 import { images } from '../data';
@@ -184,7 +189,11 @@ export function SelectField({
     <View style={[{ alignSelf: 'stretch' }, style]}>
       {label ? <Text style={s.fieldLabel}>{label}</Text> : null}
       <Pressable
-        onPress={() => !disabled && setOpen(true)}
+        onPress={() => {
+          if (disabled) return;
+          Keyboard.dismiss();
+          setOpen(true);
+        }}
         style={[s.field, open && s.fieldFocused, error && s.fieldError, disabled && s.fieldDisabled]}
       >
         {icon ? (
@@ -200,54 +209,124 @@ export function SelectField({
       </Pressable>
       {error ? <Text style={s.fieldErrorText}>{error}</Text> : null}
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
-        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <Pressable style={s.modalBackdrop} onPress={close}>
-          <Pressable style={s.optionSheet} onPress={(e) => e.stopPropagation()}>
-            <View style={s.sheetHandle} />
-            <Text style={s.sheetTitle}>{sheetTitle || label || placeholder}</Text>
-            {searchable ? (
-              <View style={[s.search, s.sheetSearch]}>
-                <Icon name="search" size={16} color={colors.muted} />
-                <TextInput
-                  style={s.searchInput}
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder="Search"
-                  placeholderTextColor={colors.muted}
-                  autoCorrect={false}
-                />
-              </View>
-            ) : null}
-            <ScrollView style={{ maxHeight: 340 }} keyboardShouldPersistTaps="handled">
-              {visible.length === 0 ? (
-                <Text style={[s.optionLabel, { color: colors.muted, padding: spacing.md }]}>No matches</Text>
-              ) : null}
-              {visible.map((opt) => {
-                const optLabel = typeof opt === 'string' ? opt : opt.label;
-                const optValue = typeof opt === 'string' ? opt : opt.value ?? opt.label;
-                const selected = optLabel === value;
-                return (
-                  <Pressable
-                    key={optValue}
-                    onPress={() => {
-                      onChange?.(optValue);
-                      close();
-                    }}
-                    style={[s.optionRow, selected && { backgroundColor: colors.glassTint }]}
-                  >
-                    <Text style={[s.optionLabel, selected && { color: colors.brandPrimary }]}>{optLabel}</Text>
-                    {selected ? <Icon name="check" size={16} color={colors.brandPrimary} /> : null}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
+      <SelectSheet
+        visible={open}
+        title={sheetTitle || label || placeholder}
+        searchLabel={label || placeholder}
+        searchable={searchable}
+        query={query}
+        onQueryChange={setQuery}
+        options={visible}
+        value={value}
+        onClose={close}
+        onSelect={(optValue) => {
+          Keyboard.dismiss();
+          onChange?.(optValue);
+          close();
+        }}
+      />
     </View>
   );
+}
+
+/** Space kept free above the sheet while the keyboard is open. */
+const SHEET_TOP_GAP = 60;
+
+/**
+ * Option sheet for SelectField, laid out like Meraqui's SearchableSelect:
+ * title row with a close button, a full-width search box, then the list.
+ * The sheet is lifted by the keyboard height so matches stay visible while typing.
+ */
+function SelectSheet({ visible, title, searchLabel, searchable, query, onQueryChange, options, value, onClose, onSelect }) {
+  const { height: appHeight } = useWindowDimensions();
+  // Android modals are edge-to-edge, so size against the full screen there.
+  const windowHeight = Platform.OS === 'android' ? Dimensions.get('screen').height : appHeight;
+  const keyboardHeight = useKeyboardHeight(visible);
+  const sheetMaxHeight = keyboardHeight > 0 ? windowHeight - keyboardHeight - SHEET_TOP_GAP : windowHeight * 0.75;
+  // Chrome above the list: padding, title row and search box.
+  const listMaxHeight = Math.max(120, Math.min(windowHeight * 0.55, sheetMaxHeight - (searchable ? 170 : 110)));
+  const placeholderLabel = String(searchLabel || '').toLowerCase();
+
+  return (
+    <Modal visible={visible} transparent statusBarTranslucent animationType="slide" onRequestClose={onClose}>
+      <View style={[s.selectBackdrop, { paddingBottom: keyboardHeight }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <SafeAreaView edges={keyboardHeight > 0 ? [] : ['bottom']} style={[s.selectSheet, { maxHeight: sheetMaxHeight }]}>
+          <View style={s.selectHeader}>
+            <Text style={s.selectTitle} numberOfLines={1}>{title}</Text>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <Icon name="x" size={22} color={colors.onSurface} />
+            </Pressable>
+          </View>
+          {searchable ? (
+            <View style={s.selectSearch}>
+              <Icon name="search" size={18} color={colors.brandPrimary} />
+              <TextInput
+                style={s.selectSearchInput}
+                value={query}
+                onChangeText={onQueryChange}
+                placeholder={placeholderLabel ? `Search ${placeholderLabel}` : 'Search'}
+                placeholderTextColor={colors.muted}
+                autoCorrect={false}
+              />
+              {query ? (
+                <Pressable onPress={() => onQueryChange('')} hitSlop={8}>
+                  <Icon name="x" size={16} color={colors.muted} />
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {/* A definite maxHeight: some Android builds collapse a FlatList sized only by an auto-height parent. */}
+          <FlatList
+            style={{ flexGrow: 0, maxHeight: listMaxHeight }}
+            data={options}
+            keyExtractor={(opt) => String(typeof opt === 'string' ? opt : opt.value ?? opt.label)}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <Text style={s.selectEmpty}>{query.trim() ? 'No matches found' : 'Nothing to choose from yet'}</Text>
+            }
+            renderItem={({ item: opt }) => {
+              const optLabel = typeof opt === 'string' ? opt : opt.label;
+              const optValue = typeof opt === 'string' ? opt : opt.value ?? opt.label;
+              const selected = optLabel === value;
+              return (
+                <Pressable onPress={() => onSelect(optValue)} style={s.selectRow}>
+                  <Text style={[s.selectRowLabel, selected && { color: colors.brandPrimary }]}>{optLabel}</Text>
+                  {selected ? <Icon name="circle-check" size={20} color={colors.brandPrimary} /> : null}
+                </Pressable>
+              );
+            }}
+          />
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
+/**
+ * Keyboard height while `active`. A sheet pinned to the bottom of a modal isn't
+ * resized for the keyboard, so it is lifted by this much instead.
+ */
+function useKeyboardHeight(active) {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) =>
+      setHeight(
+        Platform.OS === 'android' && e.endCoordinates.screenY > 0
+          ? Math.max(e.endCoordinates.height, Dimensions.get('screen').height - e.endCoordinates.screenY)
+          : e.endCoordinates.height
+      )
+    );
+    const hide = Keyboard.addListener(hideEvent, () => setHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return active ? height : 0;
 }
 
 export function SearchBar({ value, onChangeText, placeholder = 'Search by name or phone', onFilterPress, filterCount = 0, style }) {
@@ -861,7 +940,6 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   filterBadgeLabel: { ...type.caption, fontSize: 10, lineHeight: 12, color: colors.onBrand },
-  sheetSearch: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', marginBottom: spacing.sm },
   filterOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 
   chip: {
@@ -996,6 +1074,48 @@ const s = StyleSheet.create({
     borderRadius: radius.md,
   },
   optionLabel: { ...type.body, color: colors.onSurface },
+
+  selectBackdrop: { flex: 1, backgroundColor: colors.backdrop, justifyContent: 'flex-end' },
+  selectSheet: {
+    backgroundColor: colors.surfaceSecondary,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+  },
+  selectHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: 14 },
+  selectTitle: { flex: 1, ...type.heading, color: colors.onSurface },
+  selectSearch: {
+    height: 50,
+    alignSelf: 'stretch',
+    borderWidth: borderWidth.default,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  selectSearchInput: {
+    flex: 1,
+    alignSelf: 'stretch',
+    ...type.bodySmall,
+    color: colors.onSurface,
+    paddingVertical: 0,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+  },
+  selectRow: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  selectRowLabel: { flex: 1, ...type.bodySmall, fontSize: 15, color: colors.onSurface },
+  selectEmpty: { ...type.bodySmall, color: colors.muted, textAlign: 'center', paddingVertical: 18 },
 
   dialogBackdrop: {
     flex: 1,

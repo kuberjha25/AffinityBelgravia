@@ -54,14 +54,15 @@ function registrationFields(o) {
 }
 
 /**
- * Only the files for documents the chosen business type asks for — a file
- * picked under another type would otherwise be uploaded too.
+ * Only the files for documents the chosen business type asks for (plus any the
+ * registration API itself demanded) — a file picked under another type would
+ * otherwise be uploaded too.
  */
 function documentsFor(o, lookups) {
   if (o.partnerType !== 'channel_partner') return {};
   const list = lookups.cpDocuments[o.business?.businessType];
   if (list?.status !== 'succeeded') return o.documents;
-  const keys = new Set(list.items.map((d) => d.field_key));
+  const keys = new Set([...list.items.map((d) => d.field_key), ...Object.keys(o.requiredDocs || {})]);
   return Object.fromEntries(Object.entries(o.documents).filter(([key]) => keys.has(key)));
 }
 

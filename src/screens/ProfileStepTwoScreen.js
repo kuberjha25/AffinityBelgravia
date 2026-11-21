@@ -32,7 +32,7 @@ export default function ProfileStepTwoScreen({ navigation }) {
 
   const isChannelPartner = onboarding.partnerType === 'channel_partner';
   const showSocial = onboarding.partnerType === 'influencer';
-  const total = isChannelPartner ? 3 : 2;
+  const total = isChannelPartner ? 4 : 2;
   // Self-registration has no session: the employee list is loaded without a token.
   const isSelf = onboarding.mode === 'self';
 

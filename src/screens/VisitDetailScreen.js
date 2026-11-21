@@ -148,9 +148,8 @@ export default function VisitDetailScreen({ route }) {
           <KeyValue label="Visit Time" value={orDash(visit.visit_time)} icon="clock" style={{ flex: 1.3 }} compact />
         </Card>
 
-        <Card style={{ flexDirection: 'row', gap: spacing.lg }}>
-          <KeyValue label="Assigned Staff" value={orDash(visit.assigned_to === 'Unassigned' ? null : visit.assigned_to)} icon="briefcase" style={{ flex: 1 }} compact />
-          <KeyValue label="Visit Type" value={visit.visit_type && visit.visit_type !== '-' ? humanize(visit.visit_type) : '—'} icon="users" style={{ flex: 1 }} compact />
+        <Card>
+          <KeyValue label="Assigned Staff" value={orDash(visit.assigned_to === 'Unassigned' ? null : visit.assigned_to)} icon="briefcase" compact />
         </Card>
 
         <Card>

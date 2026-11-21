@@ -134,12 +134,6 @@ export default function SiteVisitsScreen({ navigation, route }) {
                   <Text style={s.metaLabel}>Project: </Text>
                   {v.project_name || '—'}
                 </Text>
-                {v.visit_type ? (
-                  <Text style={s.meta}>
-                    <Text style={s.metaLabel}>Visit type: </Text>
-                    {humanize(v.visit_type)}
-                  </Text>
-                ) : null}
               </View>
 
               <View style={{ alignItems: 'flex-end', gap: spacing.sm }}>

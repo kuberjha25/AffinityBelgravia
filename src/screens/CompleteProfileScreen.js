@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,10 +8,10 @@ import Icon from '../components/Icon';
 import DateField from '../components/DateField';
 import { WizardHeader, TextField, PrimaryButton, Eyebrow } from '../components/ui';
 import StateCityFields, { useStates } from '../components/StateCityFields';
+import PinCodeField, { usePincodeCheck } from '../components/PinCodeField';
 import { colors, radius, spacing, type, borderWidth } from '../theme';
 import { partnerTypes } from '../data';
 import { digits } from '../format';
-import { lookupPincode } from '../api';
 import { patchOnboarding } from '../store/slices/onboardingSlice';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -23,25 +23,17 @@ export default function CompleteProfileScreen({ navigation }) {
   const isAdmin = onboarding.mode === 'admin';
   const [partnerType, setPartnerType] = useState(onboarding.partnerType);
   const [form, setForm] = useState(onboarding.basic);
-  const total = partnerType === 'channel_partner' ? 3 : 2;
+  const total = partnerType === 'channel_partner' ? 4 : 2;
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
   const { canonical } = useStates();
 
-  // PIN code → city / state (India Post).
-  useEffect(() => {
-    if ((form.pincode || '').length !== 6) return undefined;
-    let cancelled = false;
-    lookupPincode(form.pincode).then((place) => {
-      if (cancelled || !place) return;
-      const state = canonical(place.state);
-      setForm((f) => ({ ...f, state, city: place.city || f.city }));
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.pincode]);
+  // PIN code checked against India Post and the chosen state / city (as on
+  // Meraqui); fills them in when they're still empty.
+  const applySuggestion = ({ state, city }) => setForm((f) => ({ ...f, state: canonical(state), city: city || '' }));
+  const pinCheck = usePincodeCheck(form.pincode, form.state, form.city, (place) =>
+    setForm((f) => (f.state || f.city ? f : { ...f, state: canonical(place.state), city: place.city || '' }))
+  );
 
   const onContinue = () => {
     if (!form.firstName.trim() || !form.lastName.trim()) {
@@ -54,6 +46,10 @@ export default function CompleteProfileScreen({ navigation }) {
     }
     if (form.email && !EMAIL.test(form.email.trim())) {
       Alert.alert('Email address', 'Please enter a valid email address.');
+      return;
+    }
+    if (pinCheck.error) {
+      Alert.alert('PIN code', pinCheck.error);
       return;
     }
     dispatch(patchOnboarding({ partnerType, basic: form }));
@@ -111,20 +107,13 @@ export default function CompleteProfileScreen({ navigation }) {
               maxLength={10}
               disabled={!isAdmin && Boolean(onboarding.mobile)}
             />
-            <TextField icon="map-pin" placeholder="Address" value={form.address} onChangeText={set('address')} />
-            <TextField
-              icon="hash"
-              placeholder="PIN Code"
-              value={form.pincode}
-              onChangeText={(v) => set('pincode')(digits(v, 6))}
-              keyboardType="number-pad"
-              maxLength={6}
-            />
+            <TextField icon="home" placeholder="Address" value={form.address} onChangeText={set('address')} />
             <StateCityFields
               state={form.state}
               city={form.city}
               onChange={({ state, city }) => setForm((f) => ({ ...f, state, city }))}
             />
+            <PinCodeField value={form.pincode} onChangeText={set('pincode')} check={pinCheck} onUseSuggestion={applySuggestion} />
             <DateField placeholder="Date of Birth" value={form.dob} onChange={set('dob')} />
             <DateField placeholder="Date of Anniversary" value={form.anniversary} onChange={set('anniversary')} />
           </View>

@@ -166,14 +166,21 @@ export const requestsApi = {
 
 /* ------------------------------------------------------------ external */
 
-/** India Post PIN code lookup → `{ city, state }` or null. */
+/**
+ * India Post PIN code lookup.
+ * → `{ found: true, city, state, districts }` (`districts` = every district /
+ * region the PIN's post offices are filed under), `{ found: false }` for an
+ * unknown PIN, or null when the lookup service can't be reached.
+ */
 export async function lookupPincode(pin) {
   try {
     const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { headers: { Accept: 'application/json' } });
     const json = await res.json();
     const entry = Array.isArray(json) ? json[0] : json;
-    const office = entry?.Status === 'Success' ? entry.PostOffice?.[0] : null;
-    return office ? { city: office.District || '', state: office.State || '' } : null;
+    const offices = entry?.Status === 'Success' ? entry.PostOffice || [] : [];
+    if (!offices.length) return { found: false };
+    const districts = [...new Set(offices.flatMap((o) => [o.District, o.Region]).filter(Boolean))];
+    return { found: true, city: offices[0].District || '', state: offices[0].State || '', districts };
   } catch {
     return null;
   }

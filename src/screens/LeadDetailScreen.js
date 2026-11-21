@@ -297,15 +297,6 @@ export default function LeadDetailScreen({ navigation, route }) {
               />
               <SecondaryButton label="Update Status" onPress={openStatus} style={{ flex: 1 }} />
             </View>
-            <View style={{ flexDirection: 'row', gap: spacing.md }}>
-              <SecondaryButton label="Add Follow-up" icon="calendar" onPress={openFollowUp} style={{ flex: 1 }} />
-              <SecondaryButton
-                label="Edit Lead"
-                icon="edit"
-                onPress={() => navigation.navigate('NewLead', { id: lead.id })}
-                style={{ flex: 1 }}
-              />
-            </View>
           </>
         ) : (
           <>

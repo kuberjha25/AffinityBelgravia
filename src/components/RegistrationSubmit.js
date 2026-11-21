@@ -16,8 +16,10 @@ import {
  * - Staff registration: the partner's mobile gets an OTP, entered here, then
  *   back to the Registrations list.
  * Returns `{ submit, submitting, dialog }`; render `dialog` in the screen.
+ * `onError(message, fieldErrors)` may handle a failed submit (e.g. mark the
+ * documents the API asked for) and return true to skip the generic alert.
  */
-export function useRegistrationSubmit(navigation) {
+export function useRegistrationSubmit(navigation, { onError } = {}) {
   const dispatch = useDispatch();
   const [submitting, setSubmitting] = useState(false);
   const [otpFor, setOtpFor] = useState(null);
@@ -25,7 +27,13 @@ export function useRegistrationSubmit(navigation) {
   const submit = async () => {
     setSubmitting(true);
     try {
-      const result = await dispatch(submitRegistration()).unwrap();
+      const action = await dispatch(submitRegistration());
+      if (submitRegistration.rejected.match(action)) {
+        const message = String(action.payload || action.error?.message || 'Something went wrong. Please try again.');
+        if (!onError?.(message, action.meta?.fieldErrors || null)) Alert.alert('Could not submit', message);
+        return;
+      }
+      const result = action.payload;
       if (result.mode === 'self') {
         navigation.reset({
           index: 0,

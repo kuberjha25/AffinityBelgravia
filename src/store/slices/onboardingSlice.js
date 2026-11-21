@@ -34,6 +34,9 @@ const blank = (mode = 'self', mobile = '') => ({
     msmeNumber: '',
   },
   documents: {}, // field_key → picked file
+  // Documents the registration API rejected as missing: field_key → { name, message }.
+  // GET /cp-documents doesn't reliably say what's mandatory, so the submit response decides.
+  requiredDocs: {},
 });
 
 const onboardingSlice = createSlice({
@@ -42,6 +45,10 @@ const onboardingSlice = createSlice({
   reducers: {
     startOnboarding: (_, { payload = {} }) => blank(payload.mode, payload.mobile || ''),
     patchOnboarding: (state, { payload }) => ({ ...state, ...payload }),
+    /** Merges `{ field_key: { name, message } }`; `null` clears the list. */
+    setRequiredDocs: (state, { payload }) => {
+      state.requiredDocs = payload ? { ...(state.requiredDocs || {}), ...payload } : {};
+    },
     setDocument: (state, { payload: { key, file } }) => {
       if (file) state.documents[key] = file;
       else delete state.documents[key];
@@ -52,5 +59,5 @@ const onboardingSlice = createSlice({
   },
 });
 
-export const { startOnboarding, patchOnboarding, setDocument } = onboardingSlice.actions;
+export const { startOnboarding, patchOnboarding, setDocument, setRequiredDocs } = onboardingSlice.actions;
 export default onboardingSlice.reducer;

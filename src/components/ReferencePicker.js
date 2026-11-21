@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator, Keyboard } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import Icon from './Icon';
 import { BottomSheet, LoadMore, uiStyles } from './ui';
@@ -52,7 +52,11 @@ export default function ReferencePicker({
     <View style={{ alignSelf: 'stretch' }}>
       {label ? <Text style={uiStyles.fieldLabel}>{label}</Text> : null}
       <Pressable
-        onPress={() => !disabled && setOpen(true)}
+        onPress={() => {
+          if (disabled) return;
+          Keyboard.dismiss();
+          setOpen(true);
+        }}
         style={[uiStyles.field, open && uiStyles.fieldFocused, disabled && uiStyles.fieldDisabled]}
       >
         <Icon name={icon} size={18} color={disabled ? colors.borderStrong : colors.brandPrimary} />
@@ -72,10 +76,10 @@ export default function ReferencePicker({
       </Pressable>
 
       <BottomSheet visible={open} onClose={close} title={sheetTitle || label || placeholder}>
-        <View style={[uiStyles.search, uiStyles.sheetSearch]}>
-          <Icon name="search" size={16} color={colors.muted} />
+        <View style={uiStyles.selectSearch}>
+          <Icon name="search" size={18} color={colors.brandPrimary} />
           <TextInput
-            style={uiStyles.searchInput}
+            style={uiStyles.selectSearchInput}
             value={query}
             onChangeText={setQuery}
             placeholder="Search by name or mobile"
