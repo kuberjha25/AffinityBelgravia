@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -11,6 +11,7 @@ import { WizardHeader, TextField, SelectField, PrimaryButton, LoadingState, Erro
 import { colors, radius, spacing, type, borderWidth } from '../theme';
 import { businessTypesFallback } from '../data';
 import { patchOnboarding, setDocument } from '../store/slices/onboardingSlice';
+import { fetchKeyedLookup } from '../store/slices/lookupsSlice';
 import { useKeyedLookup, useLookup } from '../hooks';
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -21,6 +22,9 @@ const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
  * Business types come from GET /business-types (bundled copy if that fails);
  * the documents — and which are mandatory — from GET /cp-documents for the
  * chosen type, reloaded whenever the type changes (#7).
+ * The lists for every business type are fetched as soon as the screen opens,
+ * so the documents (optional ones included) are visible straight away; until a
+ * type is chosen they are shown merged, with the types that require each one.
  */
 export default function ChannelPartnerDetailsScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -28,6 +32,7 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
   const businessTypes = useLookup('businessTypes');
   const [business, setBusiness] = useState(onboarding.business);
   const cpDocuments = useKeyedLookup('cpDocuments', business.businessType);
+  const allCpDocuments = useSelector((state) => state.lookups.cpDocuments);
   const { submit, submitting, dialog } = useRegistrationSubmit(navigation);
 
   const set = (key) => (value) => setBusiness((b) => ({ ...b, [key]: value }));
@@ -97,7 +102,44 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
       : [];
   const typeOptions = typeRows.map((b) => ({ label: b.name, value: b.slug }));
   const businessLabel = typeOptions.find((b) => b.value === business.businessType)?.label || '';
-  const docsLoading = Boolean(business.businessType) && (cpDocuments.status === 'loading' || cpDocuments.status === 'idle');
+  const typeSlugs = typeOptions.map((t) => t.value).join(',');
+
+  // Prefetch the document list of every business type (cached per type).
+  useEffect(() => {
+    typeSlugs
+      .split(',')
+      .filter(Boolean)
+      .forEach((key) => dispatch(fetchKeyedLookup({ name: 'cpDocuments', key })));
+  }, [dispatch, typeSlugs]);
+
+  // Before a type is chosen: every document any type asks for, tagged with
+  // the types that make it mandatory.
+  const mergedDocs = [];
+  const seen = {};
+  typeOptions.forEach((t) => {
+    (allCpDocuments[t.value]?.items || []).forEach((d) => {
+      if (!seen[d.field_key]) {
+        seen[d.field_key] = { ...d, requiredFor: [] };
+        mergedDocs.push(seen[d.field_key]);
+      }
+      if (d.is_mandatory) seen[d.field_key].requiredFor.push(t.label);
+    });
+  });
+  const mergedLoading =
+    !business.businessType &&
+    !mergedDocs.length &&
+    (businessTypes.status === 'loading' ||
+      typeOptions.some((t) => ['loading', 'idle', undefined].includes(allCpDocuments[t.value]?.status)));
+
+  const docs = business.businessType ? cpDocuments.items || [] : mergedDocs;
+  const docsLoading = business.businessType
+    ? cpDocuments.status === 'loading' || cpDocuments.status === 'idle'
+    : mergedLoading;
+  const docTag = (doc) => {
+    if (business.businessType) return doc.is_mandatory ? 'Required' : 'Optional';
+    return doc.requiredFor?.length ? `Required for ${doc.requiredFor.join(', ')}` : 'Optional';
+  };
+  const docRequired = (doc) => (business.businessType ? doc.is_mandatory : doc.requiredFor?.length > 0);
 
   return (
     <SafeAreaView edges={['top']} style={s.root}>
@@ -147,17 +189,20 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
           <Text style={[s.groupLabel, { marginTop: spacing.xl }]}>Upload Documents</Text>
           <Text style={s.hint}>JPG, PNG or PDF, up to 5 MB each.</Text>
 
-          {!business.businessType ? (
+          {!business.businessType && docs.length ? (
+            <Text style={s.hint}>Select the business type to confirm which documents are required.</Text>
+          ) : null}
+          {!business.businessType && !docs.length && !docsLoading ? (
             <Text style={s.hint}>Select the business type to see the documents required.</Text>
           ) : null}
           {docsLoading ? <LoadingState /> : null}
-          {cpDocuments.status === 'failed' ? <ErrorState message={cpDocuments.error} onRetry={cpDocuments.reload} /> : null}
-          {cpDocuments.status === 'succeeded' && cpDocuments.items.length === 0 ? (
+          {business.businessType && cpDocuments.status === 'failed' ? <ErrorState message={cpDocuments.error} onRetry={cpDocuments.reload} /> : null}
+          {business.businessType && cpDocuments.status === 'succeeded' && cpDocuments.items.length === 0 ? (
             <Text style={s.hint}>No documents are required at the moment.</Text>
           ) : null}
 
           <View style={{ gap: spacing.md }}>
-            {(cpDocuments.items || []).map((doc) => {
+            {docs.map((doc) => {
               const file = onboarding.documents[doc.field_key];
               return (
                 <View key={doc.field_key} style={s.docRow}>
@@ -167,9 +212,7 @@ export default function ChannelPartnerDetailsScreen({ navigation }) {
                   <View style={{ flex: 1 }}>
                     <Text style={s.docTitle}>{doc.name}</Text>
                     {file ? <Text style={s.docHint} numberOfLines={1}>{file.name}</Text> : null}
-                    <Text style={[s.docTag, doc.is_mandatory && { color: colors.error }]}>
-                      {doc.is_mandatory ? 'Required' : 'Optional'}
-                    </Text>
+                    <Text style={[s.docTag, docRequired(doc) && { color: colors.error }]}>{docTag(doc)}</Text>
                   </View>
                   <Pressable onPress={() => pickDocument(doc)} style={[s.uploadBtn, file && s.uploadBtnDone]}>
                     <Icon

@@ -62,6 +62,27 @@ const preview = (value) => {
   }
 };
 
+const isFormData = (value) => typeof FormData !== 'undefined' && value instanceof FormData;
+
+const UPLOAD_TIMEOUT_MS = 120000;
+
+/** Minimal fetch-like wrapper over XMLHttpRequest → `{ ok, status, text() }`. */
+function xhrRequest(url, { method, headers, body }) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
+    xhr.onload = () => {
+      const text = xhr.responseText || '';
+      resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, text: async () => text });
+    };
+    xhr.onerror = () => reject(new Error('Network request failed'));
+    xhr.ontimeout = () => reject(new Error('Upload timed out'));
+    xhr.send(body);
+  });
+}
+
 const toQuery = (params) => {
   if (!params) return '';
   const parts = Object.entries(params)
@@ -83,7 +104,7 @@ export async function request(path, { method = 'GET', params, body, auth = true 
   if (sentToken) headers.Authorization = `Bearer ${sentToken}`;
 
   let payload;
-  if (typeof FormData !== 'undefined' && body instanceof FormData) {
+  if (isFormData(body)) {
     payload = body; // the HTTP client sets the multipart boundary
   } else if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -102,9 +123,15 @@ export async function request(path, { method = 'GET', params, body, auth = true 
 
   let res;
   try {
-    res = await fetch(url, { method, headers, body: payload });
+    // Expo replaces the global `fetch` with `expo/fetch`, which cannot send
+    // React Native's `{ uri, name, type }` file parts (it throws "Unsupported
+    // FormDataPart implementation" before any request is made). Multipart
+    // uploads therefore go through XMLHttpRequest, which streams the files natively.
+    res = isFormData(payload)
+      ? await xhrRequest(url, { method, headers, body: payload })
+      : await fetch(url, { method, headers, body: payload });
   } catch (e) {
-    if (DEBUG) console.log(`❌ API ${tag} NETWORK ERROR: ${e?.message || e}`);
+    console.warn(`API ${tag} ${method} ${path} failed before a response: ${e?.message || e}`);
     throw new ApiError('Unable to reach the server. Please check your internet connection and try again.');
   }
 
